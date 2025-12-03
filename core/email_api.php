@@ -1810,7 +1810,6 @@ function email_bug_info_to_one_user( array $p_visible_bug_data, string $p_messag
 	# build message
 	$t_message = lang_get_defaulted( $p_message_id );
 
-
         $t_message .= event_signal( 'EVENT_BEFORE_COMPOSE_EMAIL', array( 'message_id' => $p_message_id, 'params' => $p_visible_bug_data ) );
 
 	if( is_array( $p_header_optional_params ) ) {
