@@ -72,6 +72,7 @@ event_declare_many( array(
 
 	# My view event
 	'EVENT_MY_VIEW_FILTERS' => EVENT_TYPE_FIRST,
+	'EVENT_BEFORE_COMPOSE_EMAIL' => EVENT_BEFORE_COMPOSE_EMAIL,
 
 	# Management pages
 	'EVENT_MANAGE_OVERVIEW_INFO' => EVENT_TYPE_OUTPUT,

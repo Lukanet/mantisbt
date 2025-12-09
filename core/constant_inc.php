@@ -597,6 +597,7 @@ define( 'EVENT_TYPE_EXECUTE', 1 );
 define( 'EVENT_TYPE_OUTPUT', 2 );
 define( 'EVENT_TYPE_CHAIN', 3 );
 define( 'EVENT_TYPE_FIRST', 4 );
+define( 'EVENT_BEFORE_COMPOSE_EMAIL',4);
 
 # PHPMailer Methods
 define( 'PHPMAILER_METHOD_MAIL', 0 );
