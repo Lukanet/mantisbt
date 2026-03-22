@@ -126,7 +126,33 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 		# set the current project to correctly account for user permissions
 		helper_set_current_project( $t_project_id );
 
-		if( !empty( $t_filter_id ) ) {
+		# Check for inline filter parameters (handler_id, reporter_id, status_id, etc.)
+		$t_inline_filter = rest_issue_build_inline_filter( $p_request, $t_project_id );
+
+		if( $t_inline_filter !== null ) {
+			# Use inline filter built from query parameters
+			$t_user_id = auth_get_current_user_id();
+			$t_lang = mci_get_user_lang( $t_user_id );
+
+			$t_orig_page_number = $t_page_number < 1 ? 1 : $t_page_number;
+			$t_page_count = 0;
+			$t_bug_count = 0;
+			$t_show_sticky = false;
+
+			global $g_project_override;
+			$g_project_override = $t_project_id;
+
+			$t_rows = filter_get_bug_rows(
+				$t_page_number, $t_page_size, $t_page_count, $t_bug_count,
+				$t_inline_filter, $t_project_id, $t_user_id, $t_show_sticky );
+
+			$t_issues = array();
+			if( $t_orig_page_number <= $t_page_number ) {
+				foreach( $t_rows as $t_issue_data ) {
+					$t_issues[] = mci_issue_data_as_array( $t_issue_data, $t_user_id, $t_lang, $t_select );
+				}
+			}
+		} else if( !empty( $t_filter_id ) ) {
 			$t_issues = mc_filter_get_issues(
 				'', '', $t_project_id, $t_filter_id, $t_page_number, $t_page_size, $t_select );
 		} else {
@@ -151,6 +177,141 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 	}
 
 	return $p_response->withHeader( HEADER_ETAG, $t_etag );
+}
+
+/**
+ * Build an inline filter array from REST API query parameters.
+ *
+ * Supports the same filter parameters as the SOAP API's mc_filter_search_issues,
+ * allowing ad-hoc filtering without requiring a saved filter.
+ *
+ * Supported parameters: search, handler_id, reporter_id, status_id, priority_id,
+ * severity_id, category, resolution_id, tag_string, and date range fields.
+ *
+ * @param \Slim\Http\Request $p_request    The request.
+ * @param integer            $p_project_id The project id.
+ * @return array|null Filter array or null if no inline filter params provided.
+ */
+function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_project_id ) {
+	require_api( 'filter_constants_inc.php' );
+
+	# Map of query parameter names to filter property constants.
+	# Uses the same naming convention as the SOAP API ($g_soap_api_to_filter_names).
+	static $s_param_to_filter = array(
+		'search'           => FILTER_PROPERTY_SEARCH,
+		'handler_id'       => FILTER_PROPERTY_HANDLER_ID,
+		'reporter_id'      => FILTER_PROPERTY_REPORTER_ID,
+		'status_id'        => FILTER_PROPERTY_STATUS,
+		'priority_id'      => FILTER_PROPERTY_PRIORITY,
+		'severity_id'      => FILTER_PROPERTY_SEVERITY,
+		'category'         => FILTER_PROPERTY_CATEGORY_ID,
+		'resolution_id'    => FILTER_PROPERTY_RESOLUTION,
+		'note_user_id'     => FILTER_PROPERTY_NOTE_USER_ID,
+		'product_version'  => FILTER_PROPERTY_VERSION,
+		'user_monitor_id'  => FILTER_PROPERTY_MONITOR_USER_ID,
+		'hide_status_id'   => FILTER_PROPERTY_HIDE_STATUS,
+		'sort'             => FILTER_PROPERTY_SORT_FIELD_NAME,
+		'sort_direction'   => FILTER_PROPERTY_SORT_DIRECTION,
+		'sticky'           => FILTER_PROPERTY_STICKY,
+		'view_state'       => FILTER_PROPERTY_VIEW_STATE,
+		'fixed_in_version' => FILTER_PROPERTY_FIXED_IN_VERSION,
+		'target_version'   => FILTER_PROPERTY_TARGET_VERSION,
+		'tag_string'       => FILTER_PROPERTY_TAG_STRING,
+		'tag_select'       => FILTER_PROPERTY_TAG_SELECT,
+	);
+
+	# Check if any inline filter parameters are present
+	$t_has_filter_param = false;
+	foreach( $s_param_to_filter as $t_param_name => $t_filter_prop ) {
+		if( $p_request->getParam( $t_param_name ) !== null ) {
+			$t_has_filter_param = true;
+			break;
+		}
+	}
+
+	# Also check date range parameters
+	static $s_date_params = array(
+		'start_day', 'start_month', 'start_year',
+		'end_day', 'end_month', 'end_year',
+		'last_update_start_day', 'last_update_start_month', 'last_update_start_year',
+		'last_update_end_day', 'last_update_end_month', 'last_update_end_year',
+	);
+
+	if( !$t_has_filter_param ) {
+		foreach( $s_date_params as $t_param_name ) {
+			if( $p_request->getParam( $t_param_name ) !== null ) {
+				$t_has_filter_param = true;
+				break;
+			}
+		}
+	}
+
+	if( !$t_has_filter_param ) {
+		return null;
+	}
+
+	# Build the filter array
+	$t_filter = array( '_view_type' => FILTER_VIEW_TYPE_ADVANCED );
+	$t_filter['project_id'] = array( $p_project_id );
+
+	foreach( $s_param_to_filter as $t_param_name => $t_filter_prop ) {
+		$t_value = $p_request->getParam( $t_param_name );
+		if( $t_value !== null ) {
+			# Handle comma-separated values for multi-value fields (e.g. status_id=10,50,80)
+			if( is_string( $t_value ) && strpos( $t_value, ',' ) !== false
+				&& $t_filter_prop !== FILTER_PROPERTY_SEARCH
+				&& $t_filter_prop !== FILTER_PROPERTY_TAG_STRING ) {
+				$t_value = array_map( 'trim', explode( ',', $t_value ) );
+			}
+			$t_filter[$t_filter_prop] = $t_value;
+		}
+	}
+
+	# Date range: submitted date
+	static $s_date_submitted_map = array(
+		'start_day'   => FILTER_PROPERTY_DATE_SUBMITTED_START_DAY,
+		'start_month' => FILTER_PROPERTY_DATE_SUBMITTED_START_MONTH,
+		'start_year'  => FILTER_PROPERTY_DATE_SUBMITTED_START_YEAR,
+		'end_day'     => FILTER_PROPERTY_DATE_SUBMITTED_END_DAY,
+		'end_month'   => FILTER_PROPERTY_DATE_SUBMITTED_END_MONTH,
+		'end_year'    => FILTER_PROPERTY_DATE_SUBMITTED_END_YEAR,
+	);
+
+	$t_has_date_submitted = false;
+	foreach( $s_date_submitted_map as $t_param_name => $t_filter_prop ) {
+		$t_value = $p_request->getParam( $t_param_name );
+		if( $t_value !== null ) {
+			$t_filter[$t_filter_prop] = (int)$t_value;
+			$t_has_date_submitted = true;
+		}
+	}
+	if( $t_has_date_submitted ) {
+		$t_filter[FILTER_PROPERTY_FILTER_BY_DATE_SUBMITTED] = 'on';
+	}
+
+	# Date range: last updated
+	static $s_date_updated_map = array(
+		'last_update_start_day'   => FILTER_PROPERTY_LAST_UPDATED_START_DAY,
+		'last_update_start_month' => FILTER_PROPERTY_LAST_UPDATED_START_MONTH,
+		'last_update_start_year'  => FILTER_PROPERTY_LAST_UPDATED_START_YEAR,
+		'last_update_end_day'     => FILTER_PROPERTY_LAST_UPDATED_END_DAY,
+		'last_update_end_month'   => FILTER_PROPERTY_LAST_UPDATED_END_MONTH,
+		'last_update_end_year'    => FILTER_PROPERTY_LAST_UPDATED_END_YEAR,
+	);
+
+	$t_has_date_updated = false;
+	foreach( $s_date_updated_map as $t_param_name => $t_filter_prop ) {
+		$t_value = $p_request->getParam( $t_param_name );
+		if( $t_value !== null ) {
+			$t_filter[$t_filter_prop] = (int)$t_value;
+			$t_has_date_updated = true;
+		}
+	}
+	if( $t_has_date_updated ) {
+		$t_filter[FILTER_PROPERTY_FILTER_BY_LAST_UPDATED_DATE] = 'on';
+	}
+
+	return filter_ensure_valid_filter( $t_filter );
 }
 
 /**
