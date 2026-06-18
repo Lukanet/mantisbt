@@ -1173,18 +1173,29 @@ function mc_issue_update( $p_username, $p_password, $p_issue_id, stdClass $p_iss
 			$t_bugnotes_by_id[$t_bugnote->id] = $t_bugnote;
 		}
 
+		$t_update_bugnote_threshold = config_get( 'update_bugnote_threshold', null, $t_user_id, $t_project_id );
+		$t_bugnote_user_edit_threshold = config_get( 'bugnote_user_edit_threshold', null, $t_user_id, $t_project_id );
+
 		foreach( $p_issue['notes'] as $t_note ) {
 			$t_note = ApiObjectFactory::objectToArray( $t_note );
 			$t_view_state = $t_note['view_state'] ?? config_get( 'default_bugnote_view_status' );
 
 			if( isset( $t_note['id'] ) && ( (int)$t_note['id'] > 0 ) ) {
-				$t_bugnote_id = (integer)$t_note['id'];
+				$t_bugnote_id = (int)$t_note['id'];
 
 				$t_view_state_id = mci_get_enum_id_from_objectref( 'view_state', $t_view_state );
 
 				if( array_key_exists( $t_bugnote_id, $t_bugnotes_by_id ) ) {
-					$t_bugnote_changed = false;
 					$t_bugnote = $t_bugnotes_by_id[$t_bugnote_id];
+
+					# Make sure user is allowed to edit the individual note
+					$t_user_owns_note = $t_bugnote->reporter_id == $t_user_id;
+					$t_edit_threshold = $t_user_owns_note ? $t_bugnote_user_edit_threshold : $t_update_bugnote_threshold;
+					if( !access_has_bugnote_level( $t_edit_threshold, $t_bugnote_id, $t_user_id ) ) {
+						return mci_fault_access_denied( $t_user_id , "Not allowed to update note $t_bugnote_id" );
+					}
+
+					$t_bugnote_changed = false;
 
 					if( isset( $t_note['text']) && $t_bugnote->note !== $t_note['text'] ) {
 						bugnote_set_text( $t_bugnote_id, $t_note['text'] );
@@ -1355,7 +1366,7 @@ function mc_issue_note_add( $p_username, $p_password, $p_issue_id, stdClass $p_n
 	}
 
 	# TODO: Keep the code path below for adding REMINDERs.
-	if( (integer)$p_issue_id < 1 ) {
+	if( (int)$p_issue_id < 1 ) {
 		return ApiObjectFactory::faultBadRequest( 'Invalid issue id \'' . $p_issue_id . '\'' );
 	}
 
@@ -1431,7 +1442,7 @@ function mc_issue_note_delete( $p_username, $p_password, $p_issue_note_id ) {
 		return mci_fault_login_failed();
 	}
 
-	if( (integer)$p_issue_note_id < 1 ) {
+	if( (int)$p_issue_note_id < 1 ) {
 		return ApiObjectFactory::faultBadRequest( 'Invalid issue note id \'' . $p_issue_note_id . '\'.' );
 	}
 

@@ -30,7 +30,6 @@
  * @uses event_api.php
  * @uses form_api.php
  * @uses helper_api.php
- * @uses html_api.php
  * @uses lang_api.php
  */
 
@@ -46,7 +45,6 @@ require_api( 'constant_inc.php' );
 require_api( 'event_api.php' );
 require_api( 'form_api.php' );
 require_api( 'helper_api.php' );
-require_api( 'html_api.php' );
 require_api( 'lang_api.php' );
 
 ?>
@@ -62,7 +60,7 @@ require_api( 'lang_api.php' );
 	$t_collapse_block = is_collapsed( 'bugnote_add' );
 	$t_block_css = $t_collapse_block ? 'collapsed' : '';
 	$t_block_icon = $t_collapse_block ? 'fa-chevron-down' : 'fa-chevron-up';
-	$t_allow_file_upload = file_allow_bug_upload( $f_bug_id );
+	$t_allow_file_upload = file_allow_bug_upload( $f_bug_id ) && !event_signal( 'EVENT_BUGNOTE_ADD_MODERATE_CHECK', array( $f_bug_id ) );
 ?>
 <form id="bugnoteadd"
 	method="post"
@@ -116,7 +114,10 @@ require_api( 'lang_api.php' );
 					<?php echo lang_get( 'bugnote' ) ?>
 				</th>
 				<td class="width-85">
-					<textarea name="bugnote_text" id="bugnote_text" class="<?php echo $t_bugnote_class ?>" rows="7"></textarea>
+					<textarea name="bugnote_text" id="bugnote_text" class="<?php echo $t_bugnote_class ?>"
+							  rows="7"
+							  maxlength="<?php echo config_get_global( 'max_textarea_length' ) ?>"
+					></textarea>
 				</td>
 			</tr>
 
@@ -144,26 +145,15 @@ require_api( 'lang_api.php' );
 
 	if( $t_allow_file_upload ) {
 		$t_file_upload_max_num = max( 1, config_get( 'file_upload_max_num' ) );
-		$t_max_file_size = file_get_max_file_size();
 ?>
 			<tr id="bugnote-attach-files">
 				<th class="category">
 					<?php echo lang_get( $t_file_upload_max_num == 1 ? 'upload_file' : 'upload_files' ) ?>
 					<br />
-					<?php print_max_filesize( $t_max_file_size ); ?>
+					<?php print_max_filesize( file_get_max_file_size() ) ?>
 				</th>
 				<td>
-					<?php print_dropzone_template() ?>
-					<input type="hidden" name="max_file_size" value="<?php echo $t_max_file_size ?>" />
-					<div class="dropzone center" <?php print_dropzone_form_data() ?>>
-						<?php print_icon( 'fa-cloud-upload', 'upload-icon ace-icon blue fa-3x' ); ?>
-						<br>
-						<span class="bigger-150 grey"><?php echo lang_get( 'dropzone_default_message' ) ?></span>
-						<div id="dropzone-previews-box" class="dz dropzone-previews dz-max-files-reached"></div>
-					</div>
-					<div class="fallback">
-						<input id="ufile[]" name="ufile[]" type="file" size="50" />
-					</div>
+					<?php dropzone_print() ?>
 				</td>
 			</tr>
 <?php

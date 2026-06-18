@@ -174,7 +174,11 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 	# display the available and selected bugs
 	if( in_array( $t_id, $f_bug_arr ) || !$f_show_flag ) {
 		if( $t_count_exported > 0 ) {
-			echo '<br style="mso-special-character: line-break; page-break-before: always" />';
+			if( $f_type_page == 'html' ) {
+				echo '<div class="clearfix" style="page-break-before: always">&nbsp;</div>';
+			} else {
+				echo '<br clear=all style="mso-special-character: line-break; page-break-before: always">&nbsp;';
+			}
 		}
 
 		$t_count_exported++;
@@ -191,26 +195,24 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo $t_lang_bug_view_title ?>
 	</td>
 </tr>
-<tr class="spacer" >
-	<td colspan="6"></td>
-</tr>
+<?php print_table_spacer( 6 ) ?>
 <tr class="bold">
-	<td width="16%">
+	<td>
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_id ) ?>
 	</td>
-	<td width="16%">
+	<td>
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_category ) ?>
 	</td>
-	<td width="16%">
+	<td>
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_severity ) ?>
 	</td>
-	<td width="16%">
+	<td>
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_reproducibility ) ?>
 	</td>
-	<td width="16%">
+	<td>
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_date_submitted ) ?>
 	</td>
-	<td width="16%">
+	<td>
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_last_update ) ?>
 	</td>
 </tr>
@@ -219,7 +221,7 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo $t_id ?>
 	</td>
 	<td>
-		<?php echo '[' . string_display_line( $t_project_name ) . '] ' . string_display_line( $t_category_name ) ?>
+		<?php echo '[' . string_attribute( $t_project_name ) . '] ' . string_attribute( $t_category_name ) ?>
 	</td>
 	<td>
 		<?php echo get_enum_element( 'severity', $t_bug->severity, auth_get_current_user_id(), $t_bug->project_id ) ?>
@@ -234,9 +236,7 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo date( $t_date_format, $t_bug->last_updated ) ?>
 	</td>
 </tr>
-<tr class="spacer" >
-	<td colspan="6"></td>
-</tr>
+<?php print_table_spacer( 6 ) ?>
 <tr>
 	<td class="bold">
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_reporter ) ?>
@@ -248,7 +248,7 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_platform ) ?>
 	</td>
 	<td>
-		<?php echo string_display_line( $t_bug->platform ) ?>
+		<?php echo string_attribute( $t_bug->platform ) ?>
 	</td>
 <?php if( access_has_bug_level( config_get( 'due_date_view_threshold' ), $t_id ) ) { ?>
 	<td class="bold">
@@ -286,7 +286,7 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_os ) ?>
 	</td>
 	<td>
-		<?php echo string_display_line( $t_bug->os ) ?>
+		<?php echo string_attribute( $t_bug->os ) ?>
 	</td>
 	<td colspan="2">&#160;</td>
 </tr>
@@ -301,7 +301,7 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_os_build ) ?>
 	</td>
 	<td>
-		<?php echo string_display_line( $t_bug->os_build ) ?>
+		<?php echo string_attribute( $t_bug->os_build ) ?>
 	</td>
 	<td colspan="2">&#160;</td>
 </tr>
@@ -316,7 +316,7 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_product_version ) ?>
 	</td>
 	<td>
-		<?php echo string_display_line( $t_bug->version ) ?>
+		<?php echo string_attribute( $t_bug->version ) ?>
 	</td>
 	<td colspan="2">&#160;</td>
 </tr>
@@ -325,7 +325,7 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_product_build ) ?>
 	</td>
 	<td>
-		<?php echo string_display_line( $t_bug->build ) ?>
+		<?php echo string_attribute( $t_bug->build ) ?>
 	</td>
 	<td class="bold">
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_resolution ) ?>
@@ -361,7 +361,7 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_fixed_in_version ) ?>
 	</td>
 	<td>
-		<?php echo string_display_line( $t_bug->fixed_in_version ) ?>
+		<?php echo string_attribute( $t_bug->fixed_in_version ) ?>
 	</td>
 	<td colspan="2">&#160;</td>
 
@@ -377,7 +377,7 @@ for( $j=0; $j < $t_row_count; $j++ ) {
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_target_version ) ?>
 	</td>
 	<td>
-		<?php echo string_display_line( $t_bug->target_version ) ?>
+		<?php echo string_attribute( $t_bug->target_version ) ?>
 	</td>
 	<td colspan="2">&#160;</td>
 </tr>
@@ -402,9 +402,7 @@ foreach( $t_related_custom_field_ids as $t_custom_field_id ) {
 <?php
 }       # foreach
 ?>
-<tr class="spacer" >
-	<td colspan="6"></td>
-</tr>
+<?php print_table_spacer( 6 ) ?>
 <tr>
 	<td class="bold">
 		<?php echo sprintf( lang_get( 'label' ), $t_lang_summary ) ?>
@@ -482,7 +480,7 @@ foreach( $t_related_custom_field_ids as $t_custom_field_id ) {
 					echo '<br />';
 				}
 
-				$c_filename = string_display_line( $t_attachment['display_name'] );
+				$c_filename = string_attribute( $t_attachment['display_name'] );
 				$c_download_url = htmlspecialchars( $t_attachment['download_url'] );
 				$c_filesize = number_format( $t_attachment['size'] );
 				$c_date_added = date( $t_date_format, $t_attachment['date_added'] );
@@ -497,8 +495,7 @@ foreach( $t_related_custom_field_ids as $t_custom_field_id ) {
 		?>
 	</td>
 </tr>
-
-<tr class="spacer"><td colspan="6"></td></tr>
+<?php print_table_spacer( 6 ) ?>
 </table>
 
 <?php
@@ -513,7 +510,7 @@ $t_bugnotes = bugnote_get_all_visible_bugnotes( $t_id, $t_user_bugnote_order, $t
 	if( 0 == count( $t_bugnotes ) ) {
 	?>
 <tr>
-	<td class="bold" colspan="2">
+	<td class="bold">
 		<?php echo $t_lang_no_bugnotes_msg ?>
 	</td>
 </tr>
@@ -534,7 +531,7 @@ $t_bugnotes = bugnote_get_all_visible_bugnotes( $t_id, $t_user_bugnote_order, $t
 			$t_note = string_display_links( $t_bugnote->note );
 	?>
 <tr>
-	<td width="12%">
+	<td>
 				(<?php echo bugnote_format_id( $t_bugnote->id ) ?>)
 			<br />
 				<?php print_user( $t_bugnote->reporter_id, false ) ?>&#160;&#160;&#160;
@@ -561,23 +558,18 @@ $t_bugnotes = bugnote_get_all_visible_bugnotes( $t_id, $t_user_bugnote_order, $t
 				?>
 			</td>
 		</tr>
-		<tr class="spacer"><td colspan="2"></td></tr>
 <?php
+			print_table_spacer( 2 );
 		} # end for
 	} # end else
 ?>
 </table>
-
-<?php # Bugnotes END ?>
-
-
 <?php
-		if( $f_type_page != 'html' ) {
-			echo '<hr>';
-		}
 	} # end in_array
 }  # end main loop
 
-layout_body_javascript();
+if( $f_type_page == 'html' ) {
+	layout_body_javascript();
+}
 html_body_end();
 html_end();

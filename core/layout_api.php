@@ -53,7 +53,7 @@ require_api( 'utility_api.php' );
  * @param string $p_canonical_url Canonical URL if necessary: has to be relative to the install path {@see $g_path}.
  * @return void
  */
-function layout_page_header( $p_page_title = null, $p_redirect_url = null, $p_page_id = null, $p_canonical_url = null ) {
+function layout_page_header( $p_page_title = '', $p_redirect_url = null, $p_page_id = null, $p_canonical_url = null ) {
 	layout_page_header_begin( $p_page_title );
 	if( $p_redirect_url !== null ) {
 		html_meta_redirect( $p_redirect_url );
@@ -70,7 +70,9 @@ function layout_page_header( $p_page_title = null, $p_redirect_url = null, $p_pa
  * @param string $p_page_title Page title.
  * @return void
  */
-function layout_page_header_begin( $p_page_title = null ) {
+function layout_page_header_begin( $p_page_title = '' ) {
+	$t_path = config_get_global( 'path' );
+
 	html_begin();
 	html_head_begin();
 	html_content_type();
@@ -93,14 +95,15 @@ function layout_page_header_begin( $p_page_title = null ) {
 
 	# Advertise the availability of the browser search plug-ins.
 	$t_title = htmlspecialchars( config_get( 'search_title' ) );
-	$t_searches = array( 'text', 'id' );
-	foreach( $t_searches as $t_type ) {
-		echo "\t",
-			'<link rel="search" type="application/opensearchdescription+xml" ',
-				'title="' . sprintf( lang_get( "opensearch_{$t_type}_description" ), $t_title ) . '" ',
-				'href="' . string_sanitize_url( 'browser_search_plugin.php?type=' . $t_type, true ) .
-				'"/>',
-			"\n";
+	if( !is_blank( $t_title ) ) {
+		$t_searches = array( 'text', 'id' );
+		foreach( $t_searches as $t_type ) {
+			echo "\t",
+				'<link rel="search" type="application/opensearchdescription+xml" ',
+				'title="', sprintf( lang_get( "opensearch_{$t_type}_description" ), $t_title ), '" ',
+				'href="', $t_path, 'browser_search_plugin.php?type=', $t_type, '">',
+				"\n";
+		}
 	}
 
 	html_head_javascript();
@@ -152,6 +155,8 @@ function layout_page_begin( $p_active_sidebar_page = null ) {
 	current_user_modify_single_project_default();
 
 	layout_navbar();
+	
+	event_signal( 'EVENT_LAYOUT_PAGE_HEADER' );
 
 	layout_main_container_begin();
 
@@ -165,14 +170,18 @@ function layout_page_begin( $p_active_sidebar_page = null ) {
 
 	if( auth_is_user_authenticated() ) {
 		if( ON == config_get( 'show_project_menu_bar' ) ) {
-			echo '<div class="row">' , "\n";
+			layout_main_content_row_begin();
 			print_project_menu_bar();
-			echo '</div>' , "\n";
+			layout_main_content_row_end();
 		}
 	}
-	echo '<div class="row">' , "\n";
+
+	layout_main_content_row_begin();
 
 	event_signal( 'EVENT_LAYOUT_CONTENT_BEGIN' );
+
+	# Layout is in place, inline warnings can now be displayed without messing it up.
+	error_delay_reporting( false );
 }
 
 /**
@@ -186,8 +195,7 @@ function layout_page_end() {
 
 	event_signal( 'EVENT_LAYOUT_CONTENT_END' );
 
-	echo '</div>' , "\n";
-
+	layout_main_content_row_end();
 	layout_page_content_end();
 	layout_main_content_end();
 
@@ -202,13 +210,24 @@ function layout_page_end() {
 }
 
 /**
- * Print common elements for admin pages
+ * Print common elements for admin pages.
+ *
+ * This layout should be kept as simple as possible, and should not
+ * include any access or authentication functions, as it can also be
+ * used to output some authentication-related errors, and lead to the
+ * possible endless redirect loop otherwise.
+ * @see error_handler()
+ *
  * @return void
  */
 function layout_admin_page_begin() {
 	layout_navbar();
 
 	layout_main_container_begin();
+
+	layout_main_content_begin();
+	layout_page_content_begin();
+	layout_main_content_row_begin();
 }
 
 /**
@@ -216,6 +235,10 @@ function layout_admin_page_begin() {
  * @return void
  */
 function layout_admin_page_end() {
+	layout_main_content_row_end();
+	layout_page_content_end();
+	layout_main_content_end();
+
 	layout_footer();
 	layout_scroll_up_button();
 
@@ -225,8 +248,6 @@ function layout_admin_page_end() {
 	html_body_end();
     html_end();
 }
-
-
 
 /**
  * Check if the layout is setup for right to left languages
@@ -244,7 +265,7 @@ function layout_is_rtl() {
  * @return void
  */
 function layout_head_meta() {
-	echo '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />' . "\n";
+	echo "\t" , '<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0">' , "\n";
 }
 
 /**
@@ -261,33 +282,24 @@ function layout_head_css() {
 
 		# theme text fonts
 		$t_font_family =  config_get( 'font_family', null, null, ALL_PROJECTS );
-		html_css_cdn_link( 'https://fonts.googleapis.com/css?family=' . urlencode( $t_font_family ) );
-
-		# datetimepicker
-		html_css_cdn_link( 'https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/' . DATETIME_PICKER_VERSION . '/css/bootstrap-datetimepicker.min.css', DATETIME_PICKER_HASH_CSS );
+		html_css_cdn_link( helper_url_combine( 'https://fonts.googleapis.com/css', [ 'family' => $t_font_family ] ) );
 	} else {
 		html_css_link( 'bootstrap-' . BOOTSTRAP_VERSION . '.min.css' );
 		html_css_link( 'font-awesome-' . FONT_AWESOME_VERSION . '.min.css' );
 
 		# theme text fonts
 		html_css_link( 'fonts.css', $t_cache_key );
-
-		# datetimepicker
-		html_css_link( 'bootstrap-datetimepicker-' . DATETIME_PICKER_VERSION . '.min.css' );
 	}
 
 	# page specific plugin styles
 
 	# theme styles
 	html_css_link( 'ace.min.css', $t_cache_key );
-	html_css_link( 'ace-mantis.css', $t_cache_key );
 	html_css_link( 'ace-skins.min.css', $t_cache_key );
-
 	if( layout_is_rtl() ) {
 		html_css_link( 'ace-rtl.min.css', $t_cache_key );
 	}
-
-	echo "\n";
+	html_css_link( 'ace-mantis.css', $t_cache_key );
 
 	# Set font preference
 	layout_user_font_preference();
@@ -299,6 +311,7 @@ function layout_head_css() {
  */
 function layout_user_font_preference() {
 	$t_font_family = config_get( 'font_family', null, null, ALL_PROJECTS );
+	$t_font_family = string_html_specialchars( $t_font_family );
 	echo '<style>', "\n";
 	echo  '* { font-family: "' . $t_font_family . '"; } ', "\n";
 	echo  'h1, h2, h3, h4, h5 { font-family: "' . $t_font_family . '"; } ', "\n";
@@ -314,10 +327,6 @@ function layout_body_javascript() {
 		# bootstrap
 		html_javascript_cdn_link( 'https://stackpath.bootstrapcdn.com/bootstrap/' . BOOTSTRAP_VERSION . '/js/bootstrap.min.js', BOOTSTRAP_HASH_JS );
 
-		# moment & datetimepicker
-		html_javascript_cdn_link( 'https://cdnjs.cloudflare.com/ajax/libs/moment.js/' . MOMENT_VERSION . '/moment-with-locales.min.js', MOMENT_HASH );
-		html_javascript_cdn_link( 'https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/' . DATETIME_PICKER_VERSION . '/js/bootstrap-datetimepicker.min.js', DATETIME_PICKER_HASH_JS );
-
 		# typeahead.js
 		html_javascript_cdn_link( 'https://cdnjs.cloudflare.com/ajax/libs/corejs-typeahead/' . TYPEAHEAD_VERSION . '/typeahead.jquery.min.js', TYPEAHEAD_HASH );
 
@@ -326,10 +335,6 @@ function layout_body_javascript() {
 	} else {
 		# bootstrap
 		html_javascript_link( 'bootstrap-' . BOOTSTRAP_VERSION . '.min.js' );
-
-		# moment & datetimepicker
-		html_javascript_link( 'moment-with-locales-' . MOMENT_VERSION . '.min.js' );
-		html_javascript_link( 'bootstrap-datetimepicker-' . DATETIME_PICKER_VERSION . '.min.js' );
 
 		# typeahead.js
 		html_javascript_link( 'typeahead.jquery-' . TYPEAHEAD_VERSION . '.min.js' );
@@ -345,43 +350,24 @@ function layout_body_javascript() {
 
 /**
  * Print opening markup for login/signup/register pages
+ * @param string $p_page_title page title
  * @return void
  */
-function layout_login_page_begin( $p_title = '' ) {
-	html_begin();
-	html_head_begin();
-	html_content_type();
-
-	global $g_robots_meta;
-	if( !is_blank( $g_robots_meta ) ) {
-		echo "\t", '<meta name="robots" content="', $g_robots_meta, '" />', "\n";
-	}
-
-	html_title( $p_title );
-	layout_head_meta();
-	html_css();
-	layout_head_css();
-	html_rss_link();
-
-	$t_favicon_image = config_get_global( 'favicon_image' );
-	if( !is_blank( $t_favicon_image ) ) {
-		echo "\t", '<link rel="shortcut icon" href="', helper_mantis_url( $t_favicon_image ), '" type="image/x-icon" />', "\n";
-	}
-
-	# Advertise the availability of the browser search plug-ins.
-	echo "\t", '<link rel="search" type="application/opensearchdescription+xml" title="MantisBT: Text Search" href="' . string_sanitize_url( 'browser_search_plugin.php?type=text', true) . '" />' . "\n";
-	echo "\t", '<link rel="search" type="application/opensearchdescription+xml" title="MantisBT: Issue Id" href="' . string_sanitize_url( 'browser_search_plugin.php?type=id', true) . '" />' . "\n";
+function layout_login_page_begin( $p_page_title = '' ) {
+	# Login page shouldn't be indexed by search engines
+	html_robots_noindex();
 	
-	html_head_javascript();
+	layout_page_header_begin( $p_page_title );
 	
 	event_signal( 'EVENT_LAYOUT_RESOURCES' );
 	html_head_end();
 
 	echo '<body class="login-layout light-login">';
 
+	html_top_banner( true );
 	layout_main_container_begin();
 	layout_main_content_begin();
-	echo '<div class="row">';
+	layout_main_content_row_begin();
 }
 
 /**
@@ -389,12 +375,16 @@ function layout_login_page_begin( $p_title = '' ) {
  * @return void
  */
 function layout_login_page_end() {
-	echo '</div>';
+	layout_main_content_row_end();
 	layout_main_content_end();
+	error_print_delayed();
+	html_bottom_banner();
+	layout_scroll_up_button();
 	layout_main_container_end();
 	layout_body_javascript();
 
-	echo '</body>', "\n";
+	html_body_end();
+	html_end();
 }
 
 /**
@@ -408,6 +398,8 @@ function layout_navbar() {
 	echo '<div id="navbar" class="navbar navbar-default navbar-collapse navbar-fixed-top noprint">';
 	echo '<div id="navbar-container" class="navbar-container">';
 
+	html_top_banner();
+
 	echo '<button id="menu-toggler" type="button" class="navbar-toggle menu-toggler pull-left hidden-lg hidden-md" data-target="#sidebar">';
 	echo '<span class="sr-only">Toggle sidebar</span>';
 	echo '<span class="icon-bar"></span>';
@@ -418,7 +410,7 @@ function layout_navbar() {
 	echo '<div class="navbar-header">';
 	echo '<a href="' . $t_short_path . $t_logo_url . '" class="navbar-brand">';
 	echo '<span class="smaller-75"> ';
-	echo string_display_line( config_get('window_title') );
+	echo string_attribute( config_get('window_title') );
 	echo ' </span>';
 	echo '</a>';
 
@@ -480,14 +472,9 @@ function layout_navbar_user_menu( $p_show_avatar = true ) {
 	echo '<a data-toggle="dropdown" href="#" class="dropdown-toggle">';
 	if( $p_show_avatar ) {
 		layout_navbar_user_avatar();
-		echo '<span class="user-info">';
-		echo $t_username;
-		echo '</span>';
-		print_icon( 'fa-angle-down', 'ace-icon' );
-	} else {
-		echo '&#160;' . $t_username . '&#160;' . "\n";
-		print_icon( 'fa-angle-down', 'ace-icon bigger-110' );
 	}
+	echo '<span class="user-info">', $t_username, '</span>';
+	print_icon( 'fa-angle-down', 'ace-icon bigger-110' );
 	echo '</a>';
 	echo '<ul class="user-menu dropdown-menu dropdown-menu-right dropdown-yellow dropdown-caret dropdown-close">';
 
@@ -940,7 +927,7 @@ function layout_sidebar_menu( $p_page, $p_title, $p_icon, $p_active_sidebar_page
 	}
 
 	# Handle relative / absolute urls
-	if ( stripos( $p_page, 'https:' ) === 0 || stripos( $p_page, 'http:' ) === 0 ) {
+	if( !is_null( parse_url( $p_page, PHP_URL_SCHEME ) ) ) {
 		$t_url = $p_page;
 	} else {
 		$t_url = helper_mantis_url( $p_page );
@@ -1011,11 +998,27 @@ function layout_main_content_end() {
 }
 
 /**
+ * Render opening markup for main content row
+ * @return void
+ */
+function layout_main_content_row_begin() {
+	echo '<div class="row">' , "\n";
+}
+
+/**
+ * Render closing markup for main content row
+ * @return void
+ */
+function layout_main_content_row_end() {
+	echo '</div>' , "\n";
+}
+
+/**
  * Render opening markup for main page content
  * @return void
  */
 function layout_page_content_begin() {
-	echo '  <div class="page-content">' , "\n";
+	echo '<div class="page-content">' , "\n";
 }
 
 /**
@@ -1031,7 +1034,6 @@ function layout_page_content_end() {
 	echo '</div>' , "\n";
 }
 
-
 /**
  * Render breadcrumbs bar.
  * @return void
@@ -1045,26 +1047,24 @@ function layout_breadcrumbs() {
 
 	# Login information
 	echo '<ul class="breadcrumb">' , "\n";
+	echo '  <li>';
+	print_icon( 'fa-user', 'home-icon active' );
 	if( current_user_is_anonymous() ) {
 		$t_return_page = $_SERVER['SCRIPT_NAME'];
 		if( isset( $_SERVER['QUERY_STRING'] ) && !is_blank( $_SERVER['QUERY_STRING'] )) {
 			$t_return_page .= '?' . $_SERVER['QUERY_STRING'];
 		}
 
-		$t_return_page = string_url( $t_return_page );
+		echo '  ' . lang_get( 'anonymous' ) . "\n";
 
-		echo ' <li>';
-		print_icon( 'fa-user', 'home-icon active' );
-		echo lang_get( 'anonymous' ) . ' </li>' . "\n";
-
-		echo '<div class="btn-group btn-corner">' . "\n";
-		echo '	<a href="' . helper_mantis_url( auth_login_page( 'return=' . $t_return_page ) ) .
+		echo '  <div class="btn-group btn-corner">' . "\n";
+		echo '	<a href="' . helper_mantis_url( auth_login_page( [ 'return' => $t_return_page ] ) ) .
 			'" class="btn btn-primary btn-xs">' . lang_get( 'login' ) . '</a>' . "\n";
 		if( auth_signup_enabled() ) {
 			echo '	<a href="' . helper_mantis_url( 'signup_page.php' ) . '" class="btn btn-primary btn-xs">' .
 				lang_get( 'signup_link' ) . '</a>' . "\n";
 		}
-		echo '</div>' . "\n";
+		echo '  </div></li>' . "\n";
 
 	} else {
 		$t_protected = current_user_get_field( 'protected' );
@@ -1073,14 +1073,12 @@ function layout_breadcrumbs() {
 		$t_realname = current_user_get_field( 'realname' );
 		$t_display_realname = is_blank( $t_realname ) ? '' : ' ( ' . string_html_specialchars( $t_realname ) . ' ) ';
 
-		echo '  <li>';
-		print_icon( 'fa-user', 'home-icon active' );
 		$t_page = ( OFF == $t_protected ) ? 'account_page.php' : 'my_view_page.php';
 		echo '  <a href="' . helper_mantis_url( $t_page ) . '">' .
 			$t_display_username . $t_display_realname . '</a>' . "\n";
 
 		$t_label = layout_is_rtl() ? 'arrowed-right' : 'arrowed';
-		echo '  <span class="label hidden-xs label-default ' . $t_label . '">' . $t_access_level . '</span></li>' . "\n";
+		echo '  <span class="label hidden-xs label-default ' . $t_label . '">' . string_attribute( $t_access_level ) . '</span></li>' . "\n";
 	}
 	echo '</ul>' , "\n";
 
@@ -1105,18 +1103,30 @@ function layout_breadcrumbs() {
 		}
 	}
 
-	# Bug Jump form
+	layout_bug_jump_form();
+
+	echo '</div>';
+	echo PHP_EOL;
+}
+
+/**
+ * Prints the form allowing to jump to the given bug ID..
+ *
+ * @return void
+ */
+function layout_bug_jump_form(): void {
 	# CSRF protection not required here - form does not result in modifications
 	echo '<div id="nav-search" class="nav-search">';
-	echo '<form class="form-search" method="post" action="' . helper_mantis_url( 'jump_to_bug.php' ) . '">';
+	printf( '<form class="form-search" method="post" action="%s">',
+		helper_mantis_url( 'jump_to_bug.php' )
+	);
 	echo '<span class="input-icon">';
-	echo '<input type="text" name="bug_id" autocomplete="off" class="nav-search-input" placeholder="' . lang_get( 'issue_id' ) . '">';
+	printf( '<input type="text" name="bug_id" autocomplete="off" class="nav-search-input" placeholder="%s">',
+		lang_get( 'issue_id' )
+	);
 	print_icon( 'fa-search', 'ace-icon nav-search-icon' );
 	echo '</span>';
 	echo '</form>';
-	echo '</div>';
-	echo PHP_EOL;
-
 	echo '</div>';
 	echo PHP_EOL;
 }
@@ -1253,6 +1263,8 @@ function layout_footer() {
 		echo '</div>' . "\n";
 	}
 
+	html_bottom_banner();
+
 	layout_footer_end();
 }
 
@@ -1262,7 +1274,6 @@ function layout_footer() {
  */
 function layout_footer_begin() {
 	echo '<div class="clearfix"></div>' . "\n";
-	echo '<div class="space-20"></div>' . "\n";
 	echo '<div class="footer noprint">' . "\n";
 	echo '<div class="footer-inner">' . "\n";
 	echo '<div class="footer-content">' . "\n";
@@ -1295,7 +1306,7 @@ function layout_scroll_up_button() {
 function layout_login_page_logo() {
 	?>
 	<div class="login-logo">
-		<img src="<?php echo helper_mantis_url( config_get_global( 'logo_image' ) ); ?>">
+		<img src="<?php echo helper_mantis_url( config_get_global( 'logo_image' ) ); ?>" alt="<?php echo string_html_specialchars( config_get( 'window_title' ) ); ?>">
 	</div>
 	<?php
 }

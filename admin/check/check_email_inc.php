@@ -89,13 +89,13 @@ foreach( $t_duplicate_emails as &$t_users ) {
 	foreach( $t_users as $t_id => &$t_username ) {
 		$t_username = sprintf( '<a href="%s">%s</a>',
 			$t_user_edit_page . $t_id,
-			string_display_line( $t_username )
+			string_attribute( $t_username )
 		);
 	}
 }
 
 if( OFF == config_get_global( 'allow_blank_email' ) ) {
-	$t_users_without_email = $t_duplicate_emails[null] ?? [];
+	$t_users_without_email = $t_duplicate_emails[''] ?? [];
 	check_print_test_row(
 		'All users must have an e-mail address',
 		empty( $t_users_without_email ),

@@ -18,11 +18,6 @@
 # along with Mantis.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- * Collapsible element functions
- */
-var g_collapse_clear = 1;
-
 /**
  * MantisBT config options.
  * Initialized in javascript_config.php
@@ -131,49 +126,60 @@ $(document).ready( function() {
 		$('#projects-list .search').focus();
 	});
 
-	$('.widget-box').on('shown.ace.widget' , function(event) {
-		var t_id = $(this).attr('id');
-		var t_cookie = GetCookie( config.collapse_settings_cookie );
-		if ( 1 == g_collapse_clear ) {
-			t_cookie = "";
-			g_collapse_clear = 0;
-		}
-		t_cookie = t_cookie.replace("|" + t_id + ":1", '' );
-		t_cookie = t_cookie + "|" + t_id + ":0";
-		SetCookie( config.collapse_settings_cookie, t_cookie );
-	});
+	$('.widget-box').on('shown.ace.widget', function(event) {
+		SetCookie(config.collapse_settings_cookie, $(this).attr('id'), false);
+	}).on('hidden.ace.widget', function(event) {
+		SetCookie(config.collapse_settings_cookie, $(this).attr('id'), true);
+	}).each( function() {
+		// Restore widget collapse state from cookies
+		var t_collapse = GetCookieId(config.collapse_settings_cookie, $(this).attr('id'));
+		if( t_collapse != -1 && $(this).find('> .widget-header a[data-action=collapse]').length ) {
+			t_collapse = ( t_collapse == '1' );
+			if( t_collapse != $(this).hasClass('collapsed') ) {
 
-	$('.widget-box').on('hidden.ace.widget' , function(event) {
-		var t_id = $(this).attr('id');
-		var t_cookie = GetCookie( config.collapse_settings_cookie );
-		if ( 1 == g_collapse_clear ) {
-			t_cookie = "";
-			g_collapse_clear = 0;
+				var t_icon = $(this).find('> .widget-header a .ace-icon');
+				var t_icon_1 = t_icon.data('icon-hide');
+				if ( !t_icon_1 ) t_icon_1 = 'fa-chevron-up';
+				var t_icon_2 = t_icon.data('icon-show');
+				if ( !t_icon_2 ) t_icon_2 = 'fa-chevron-down';
+
+				if ( t_collapse ) {
+					$(this).addClass('collapsed');
+					t_icon.removeClass(t_icon_1).addClass(t_icon_2);
+				} else {
+					$(this).removeClass('collapsed');
+					t_icon.removeClass(t_icon_2).addClass(t_icon_1);
+				}
+			}
 		}
-		t_cookie = t_cookie.replace( "|" + t_id + ":0", '' );
-		t_cookie = t_cookie + "|" + t_id + ":1";
-		SetCookie( config.collapse_settings_cookie, t_cookie );
 	});
 
 	$('#sidebar-btn.sidebar-toggle').on('click', function (event) {
-		var t_cookie;
 		var t_sidebar = $(this).closest('.sidebar');
-		var t_id = t_sidebar.attr('id');
+		SetCookie(config.collapse_settings_cookie, t_sidebar.attr('id'), !t_sidebar.hasClass("menu-min"));
+	}).each( function() {
+		// Restore sidebar collapse state from cookies
+		var t_sidebar = $(this).closest('.sidebar');
+		var t_collapse = GetCookieId(config.collapse_settings_cookie, t_sidebar.attr('id'));
+		if( t_collapse != -1 ) {
+			t_collapse = ( t_collapse == '1' );
+			if( t_collapse != t_sidebar.hasClass('menu-min') ) {
 
-		if (1 == g_collapse_clear) {
-			t_cookie = "";
-			g_collapse_clear = 0;
-		} else {
-			// Get collapse state and remove the old value
-			t_cookie = GetCookie(config.collapse_settings_cookie);
-			t_cookie = t_cookie.replace(new RegExp('\\|' + t_id + ':.'), '');
-		}
+				var t_icon = $(this).find('> .ace-icon');
+				var t_icon_1 = t_icon.data('icon1');
+				if( !t_icon_1 ) t_icon_1 = 'fa-angle-double-left';
+				var t_icon_2 = t_icon.data('icon2');
+				if( !t_icon_2 ) t_icon_2 = 'fa-angle-double-right';
 
-		// Save the new collapse state
-		var t_value = !t_sidebar.hasClass("menu-min") | 0;
-		t_cookie += '|' + t_id + ':' + t_value;
-
-		SetCookie(config.collapse_settings_cookie, t_cookie);
+				if ( t_collapse ) {
+					t_sidebar.addClass('menu-min');
+					t_icon.removeClass(t_icon_1).addClass(t_icon_2);
+				} else {
+					t_sidebar.removeClass('menu-min');
+					t_icon.removeClass(t_icon_2).addClass(t_icon_1);
+				}
+			}
+		}		
 	});
 
 	$('input[type=text].typeahead').each(function() {
@@ -327,113 +333,6 @@ $(document).ready( function() {
 		jcontainer.data('checkbox-range-last-clicked', this);
 	});
 
-	var stopwatch = {
-		timerID: 0,
-		startTime: null,
-		zeroTime: moment('0', 's'),
-		tick: function() {
-			var elapsedDiff = moment().diff(this.startTime),
-				elapsedTime = this.zeroTime.clone().add(elapsedDiff);
-
-			$('input[type=text].stopwatch_time').val(elapsedTime.format('HH:mm:ss'));
-		},
-		reset: function() {
-			this.stop();
-			$('input[type=text].stopwatch_time').val('');
-		},
-		start: function() {
-			var self = this,
-				timeFormat = '',
-				stoppedTime = $('input[type=text].stopwatch_time').val();
-
-			this.stop();
-
-			if (stoppedTime) {
-				switch (stoppedTime.split(':').length) {
-					case 1:
-						timeFormat = 'ss';
-						break;
-
-					case 2:
-						timeFormat = 'mm:ss';
-						break;
-
-					default:
-						timeFormat = 'HH:mm:ss';
-				}
-
-				this.startTime = moment().add(this.zeroTime.clone().diff(moment(stoppedTime, timeFormat)));
-			} else {
-				this.startTime = moment();
-			}
-
-			this.timerID = window.setInterval(function() {
-				self.tick();
-			}, 1000);
-
-			$('input[type=button].stopwatch_toggle').val(translations['time_tracking_stopwatch_stop']);
-		},
-		stop: function() {
-			if (this.timerID) {
-				window.clearInterval(this.timerID);
-				this.timerID = 0;
-			}
-
-			$('input[type=button].stopwatch_toggle').val(translations['time_tracking_stopwatch_start']);
-		}
-	};
-
-	$('input[type=button].stopwatch_toggle').click(function() {
-		if (!stopwatch.timerID) {
-			stopwatch.start();
-		} else {
-			stopwatch.stop();
-		}
-	});
-
-	$('input[type=button].stopwatch_reset').click(function() {
-		stopwatch.reset();
-	});
-
-	$('input[type=text].datetimepicker').each(function(index, element) {
-		$(this).datetimepicker({
-			locale: $(this).data('picker-locale'),
-			format: $(this).data('picker-format'),
-			useCurrent: false,
-			icons: {
-				time: 'fa fa-clock-o',
-				date: 'fa fa-calendar',
-				up: 'fa fa-chevron-up',
-				down: 'fa fa-chevron-down',
-				previous: 'fa fa-chevron-left',
-				next: 'fa fa-chevron-right',
-				today: 'fa fa-arrows ',
-				clear: 'fa fa-trash',
-				close: 'fa fa-times'
-			}
-		}).next().on(ace.click_event, function() {
-			$(this).prev().focus();
-		});
-	});
-
-	$( 'form .dropzone' ).each(function(){
-		var classPrefix = 'dropzone';
-		var autoUpload = $(this).hasClass('auto-dropzone');
-		var zoneObj = enableDropzone( classPrefix, autoUpload );
-		if( zoneObj ) {
-			/* Attach image paste handler to report-bug & add-note forms */
-			$( '#bugnoteadd, #report_bug_form' ).bind( 'paste', function( event ) {
-				var items = ( event.clipboardData || event.originalEvent.clipboardData ).items;
-				for( index in items ) {
-					var item = items[index];
-					if( item.kind === 'file' ) {
-						zoneObj.addFile( item.getAsFile() )
-					}
-				}
-			});
-		}
-	});
-
 	$('.bug-jump').find('[name=bug_id]').focus( function() {
 		var bug_label = $('.bug-jump-form').find('[name=bug_label]').val();
 		if( $(this).val() == bug_label ) {
@@ -506,18 +405,6 @@ $(document).ready( function() {
 		}
 	});
 
-	/* For Period.php bundled with the core MantisGraph plugin */
-	$('#dates > input[type=image].datetime').hide();
-	$('#period_menu > select#interval').change(function() {
-		if ($(this).val() == 10) {
-			$('#dates > input[type=text].datetime').prop('disabled', false);
-			$('#dates > input[type=image].datetime').show();
-		} else {
-			$('#dates > input[type=text].datetime').prop('disabled', true);
-			$('#dates > input[type=image].datetime').hide();
-		}
-	});
-
 	$(document).on('change', '#tag_select', function() {
 		var tagSeparator = $('#tag_separator').val();
 		var currentTagString = $('#tag_string').val();
@@ -534,11 +421,11 @@ $(document).ready( function() {
 		$(this).val(0);
 	});
 
-	$('a.click-url').bind("click", function() {
-		$(this).attr("href", $(this).attr("url"));
+	$('a.click-url').on("click", function() {
+		$(this).attr("href", $(this).data("url"));
 	});
 
-	$('input[name=private].ace').bind("click", function() {
+	$('input[name=private].ace').on("click", function() {
 		if ($(this).is(":checked")){
 			$('textarea[name=bugnote_text]').addClass("bugnote-private");
 		} else {
@@ -636,6 +523,21 @@ $(document).ready( function() {
 			.addClass(getColorClassName(me.val()));
 		me.data('prev', me.val());
 	});
+
+	/**
+	 * Adjust footer height based on its content
+	 */
+	var bottom = $('.navbar-fixed-bottom');
+	var bottom_placeholder = $('<div>', {
+		'class': 'col-xs-12',
+		'width': '100%'
+	}).insertBefore(bottom);
+	var footer = $('.footer');
+	var footer_content = $('.footer-content');
+	$(window).on('resize.footer', function() {
+		bottom_placeholder.css('height', parseInt(bottom.height()) + 'px');
+		footer.css('padding-top', parseInt(footer_content.height()) + 'px');
+		}).triggerHandler('resize.footer');
 });
 
 function setBugLabel() {
@@ -681,45 +583,55 @@ function Trim( p_string ) {
  * Cookie functions
  */
 function GetCookie( p_cookie ) {
-	var t_cookies = document.cookie;
-
-	t_cookies = t_cookies.split( ";" );
-
-	var i = 0;
-	while( i < t_cookies.length ) {
-		var t_cookie = t_cookies[ i ];
-
-		t_cookie = t_cookie.split( "=" );
-		if ( Trim( t_cookie[ 0 ] ) == p_cookie ) {
-			return( t_cookie[ 1 ] );
+	var t_cookies = document.cookie.split(';');
+	for( var i in t_cookies ) {
+		var t_cookie = t_cookies[i].split('=');
+		if ( Trim( t_cookie[0] ) == p_cookie ) {
+			return t_cookie[1].split('|');
 		}
-		i++;
 	}
 
 	return -1;
 }
 
-function SetCookie( p_cookie, p_value ) {
+function SetCookie( p_cookie, p_id, p_value ) {
 	var t_expires = new Date();
+	t_expires.setTime(t_expires.getTime() + (365 * 24 * 60 * 60 * 1000));
 
-	t_expires.setTime( t_expires.getTime() + (365 * 24 * 60 * 60 * 1000));
+	var t_new_cookies = new Array();
+	var t_cookies = GetCookie(p_cookie);
+	if( t_cookies != -1 ) {
+		for( var i in t_cookies ) {
+			if ( t_cookies[i].indexOf(p_id + ':') != 0 ) {
+				t_new_cookies.push(t_cookies[i]);
+			}
+		}
+	}
+	t_new_cookies.push(p_id + ':' + (p_value ? '1' : '0'));
 
-	document.cookie = p_cookie + "=" + p_value +
+	document.cookie = p_cookie + "=" + t_new_cookies.join('|') +
 		"; expires=" + t_expires.toUTCString() +
 		( config.cookie_domain ? "; domain=" + config.cookie_domain : '' ) +
 		"; path=" + config.cookie_path +
 		"; samesite=" + config.cookie_samesite;
 }
 
+function GetCookieId( p_cookie, p_id ) {
+	var t_cookies = GetCookie(p_cookie);
+	if( t_cookies != -1 ) {
+		for( var i in t_cookies ) {	
+			if( t_cookies[i].indexOf(p_id + ':') == 0 ) {
+				return t_cookies[i].at(p_id.length + 1);
+			}
+		}
+	}
+
+	return -1;
+}
+
 function ToggleDiv( p_div ) {
 	var t_open_div = '#' + p_div + "_open";
 	var t_closed_div = '#' + p_div + "_closed";
-
-	var t_cookie = GetCookie( config.collapse_settings_cookie );
-	if ( 1 == g_collapse_clear ) {
-		t_cookie = "";
-		g_collapse_clear = 0;
-	}
 	var t_open_display = $(t_open_div).css('display');
 	$(t_open_div).toggle();
 
@@ -727,15 +639,7 @@ function ToggleDiv( p_div ) {
 		$(t_closed_div).toggle();
 	}
 
-	if ( t_open_display == "none" ) {
-		t_cookie = t_cookie.replace( "|" + p_div + ":0", '' );
-		t_cookie = t_cookie + "|" + p_div + ":1";
-	} else {
-		t_cookie = t_cookie.replace( "|" + p_div + ":1", '' );
-		t_cookie = t_cookie + "|" + p_div + ":0";
-	}
-
-	SetCookie( config.collapse_settings_cookie, t_cookie );
+	SetCookie( config.collapse_settings_cookie, p_div, ( t_open_display == "none" )	);
 }
 
 function setDisplay(idTag, state)
@@ -752,118 +656,4 @@ function setDisplay(idTag, state)
 function toggleDisplay(idTag)
 {
 	setDisplay( idTag, (document.getElementById(idTag).style.display == 'none')?1:0 );
-}
-
-// Dropzone handler
-Dropzone.autoDiscover = false;
-function enableDropzone( classPrefix, autoUpload ) {
-	var zone_class =  '.' + classPrefix;
-	var zone = $( zone_class );
-	var form = zone.closest('form');
-	var max_filesize_bytes = zone.data('max-filesize-bytes');
-	var max_filesize_mb = Math.ceil( max_filesize_bytes / ( 1024*1024) );
-	var max_filename_length = zone.data( 'max-filename-length' );
-	var options = {
-		forceFallback: zone.data('force-fallback'),
-		paramName: "ufile",
-		autoProcessQueue: autoUpload,
-		clickable: zone_class,
-		previewsContainer: '#' + classPrefix + '-previews-box',
-		uploadMultiple: true,
-		parallelUploads: 100,
-		maxFilesize: max_filesize_mb,
-		timeout: 0,
-		addRemoveLinks: false,
-		acceptedFiles: zone.data('accepted-files'),
-		thumbnailWidth: 150,
-		thumbnailMethod: 'contain',
-		dictDefaultMessage: zone.data('default-message'),
-		dictFallbackMessage: zone.data('fallback-message'),
-		dictFallbackText: zone.data('fallback-text'),
-		dictFileTooBig: zone.data('file-too-big'),
-		dictInvalidFileType: zone.data('invalid-file-type'),
-		dictResponseError: zone.data('response-error'),
-		dictCancelUpload: zone.data('cancel-upload'),
-		dictCancelUploadConfirmation: zone.data('cancel-upload-confirmation'),
-		dictRemoveFile: zone.data('remove-file'),
-		dictRemoveFileConfirmation: zone.data('remove-file-confirmation'),
-		dictMaxFilesExceeded: zone.data('max-files-exceeded'),
-
-		init: function () {
-			var dropzone = this;
-			var form = $( this.options.clickable ).closest('form');
-			form.on('submit', function (e) {
-				if( dropzone.getQueuedFiles().length ) {
-					e.preventDefault();
-					e.stopPropagation();
-					dropzone.processQueue();
-				}
-			});
-			this.on( "successmultiple", function( files, response ) {
-				document.open();
-				document.write( response );
-				document.close();
-			});
-			/**
-			 * 'addedfiles' is undocumented but works similar to 'addedfile'
-			 * It's triggered once after a multiple file addition, and receives
-			 * an array with the added files.
-			 */
-			this.on("addedfiles", function (files) {
-				var bullet = '-\u00A0';
-				var error_file_too_big = '';
-				var error_filename_too_long = '';
-				for (var i = 0; i < files.length; i++) {
-					if( files[i].size > max_filesize_bytes ) {
-						var size_mb = files[i].size / ( 1024*1024 );
-						var dec = size_mb < 0.01 ? 3 : 2;
-						error_file_too_big += bullet + '"' + files[i].name + '" (' + size_mb.toFixed(dec) + ' MiB)\n';
-						this.removeFile( files[i] );
-					} else if( files[i].name.length > 250 ) {
-						error_filename_too_long += bullet + '"' + files[i].name + '" (' + files[i].name.length + ')\n';
-						// this.removeFile( files[i] );
-					}
-				}
-
-				var text = '';
-				var error_message = '';
-				if( error_file_too_big ) {
-					var max_mb = max_filesize_bytes / ( 1024*1024 );
-					var max_mb_dec = max_mb < 0.01 ? 3 : 2;
-					text = zone.data( 'dropzone_multiple_files_too_big' ) + "\n";
-					text = text.replace( '{{files}}', '\n' + error_file_too_big );
-					text = text.replace( '{{maxFilesize}}', max_mb.toFixed(max_mb_dec) );
-					error_message += text;
-				}
-
-				if( error_filename_too_long ) {
-					text = zone.data( 'dropzone_multiple_filenames_too_long' ) + "\n";
-					text = text.replace( '{{maxFilenameLength}}', max_filename_length );
-					text = text.replace( '{{files}}', '\n' + error_filename_too_long );
-					error_message += text;
-				}
-				if( error_message ) {
-					alert(error_message);
-				}
-			});
-		},
-		fallback: function() {
-			if( $( "." + classPrefix ).length ) {
-				$( "." + classPrefix ).hide();
-			}
-		}
-	};
-	var preview_template = document.getElementById('dropzone-preview-template');
-	if( preview_template ) {
-		options.previewTemplate = preview_template.innerHTML;
-	}
-
-	var zone_object = null;
-	try {
-		zone_object = new Dropzone( form[0], options );
-	} catch (e) {
-		alert( zone.data('dropzone-not-supported') );
-	}
-
-	return zone_object;
 }

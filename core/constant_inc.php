@@ -21,7 +21,7 @@
 /**
  * Mantis Version
  */
-define( 'MANTIS_VERSION', '2.28.0-dev' );
+define( 'MANTIS_VERSION', '2.29.0-dev' );
 define( 'FILTER_VERSION', 'v9' );
 
 # --- constants -------------------
@@ -34,8 +34,16 @@ define( 'BAD', 0 );
 define( 'GOOD', 1 );
 define( 'WARN', 2 );
 
-# PHP-related constants
-define( 'PHP_MIN_VERSION', '7.4.0' );
+# PHP version constants. PHP_VERSION:
+# - MUST¹ be >= PHP_MIN_VERSION and < PHP_MAX_VERSION
+# - SHOULD be < PHP_SUPPORTED_VERSION (Later versions have not been tested,
+#   there may be compatibility issues)
+# ¹ Enforced in core.php, MantisBT will halt if condition is not met.
+define( 'PHP_MIN_VERSION', '8.1.0' );
+//define( 'PHP_MAX_VERSION', '8.4.0' ); # Do not define (i.e. comment out) if there are no known restrictions
+define( 'PHP_SUPPORTED_VERSION', '8.5' ); # should be defined as X.Y (not X.Y.Z)
+
+# Other PHP-related constants
 define( 'PHP_CLI', 0 );
 define( 'PHP_CGI', 1 );
 
@@ -535,6 +543,7 @@ define( 'TOKEN_AUTHENTICATED', 4 );
 define( 'TOKEN_COLLAPSE', 5 );
 define( 'TOKEN_ACCOUNT_VERIFY', 6 );
 define( 'TOKEN_ACCOUNT_ACTIVATION', 7 );
+define( 'TOKEN_ACCOUNT_CHANGE_EMAIL', 8 );
 define( 'TOKEN_USER', 1000 );
 
 # Token expiry durations (in seconds)
@@ -615,9 +624,11 @@ define( 'EMAIL_SHUTDOWN_FORCE', 2 );
 define( 'DB_FIELD_SIZE_USERNAME', 191 );
 define( 'DB_FIELD_SIZE_REALNAME', 255 );
 define( 'DB_FIELD_SIZE_PASSWORD', 64 );
+define( 'DB_FIELD_SIZE_BUG_SUMMARY', 128 );
 define( 'DB_FIELD_SIZE_API_TOKEN_NAME', 128 );
 define( 'DB_FIELD_SIZE_HISTORY_VALUE', 255 );
 define( 'DB_FIELD_SIZE_FILENAME', 250 );
+define( 'DB_FIELD_SIZE_CF_DEFAULT_VALUE', 255 );
 
 # Maximum size for the user's password when storing it as a hash
 define( 'PASSWORD_MAX_SIZE_BEFORE_HASH', 1024 );
@@ -647,8 +658,8 @@ define( 'ERROR_USER_REAL_MATCH_USER', 807 );
 
 # JQuery
 # hashes acquired with command 'cat file.js | openssl dgst -sha256 -binary | openssl enc -base64 -A'
-define( 'JQUERY_VERSION', '2.2.4' );
-define( 'JQUERY_HASH', 'sha256-BbhdlvQf/xTY9gja0Dq3HiwQF8LaCRTXxZKRutelT44=' );
+define( 'JQUERY_VERSION', '3.7.1' );
+define( 'JQUERY_HASH', 'sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=' );
 
 # Bootstrap & FontAwesome
 define( 'BOOTSTRAP_VERSION', '3.4.1' );
@@ -660,9 +671,9 @@ define( 'FONT_AWESOME_HASH', 'sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFl
 # Moment & DateTimePicker
 define( 'MOMENT_VERSION', '2.29.4' );
 define( 'MOMENT_HASH', 'sha512-42PE0rd+wZ2hNXftlM78BSehIGzezNeQuzihiBCvUEB3CVxHvsShF86wBWwQORNxNINlBPuq7rG4WWhNiTVHFg==' );
-define( 'DATETIME_PICKER_VERSION', '4.17.47' );
-define( 'DATETIME_PICKER_HASH_JS', 'sha256-5YmaxAwMjIpMrVlK84Y/+NjCpKnFYa8bWWBbUHSBGfU=' );
-define( 'DATETIME_PICKER_HASH_CSS', 'sha256-yMjaV542P+q1RnH6XByCPDfUFhmOafWbeLPmqKh11zo=' );
+define( 'DATETIME_PICKER_VERSION', '4.17.49' );
+define( 'DATETIME_PICKER_HASH_JS', 'sha256-dYxUtecag9x4IaB2vUNM34sEso6rWTgEche5J6ahwEQ=' );
+define( 'DATETIME_PICKER_HASH_CSS', 'sha256-9FNpuXEYWYfrusiXLO73oIURKAOVzqzkn69cVqgKMRY=' );
 
 # Tyeahead JS
 define( 'TYPEAHEAD_VERSION', '1.3.4' );
@@ -692,8 +703,10 @@ define( 'DB_MAX_INT', 2147483647 );
 # HTTP Status Codes
 define( 'HTTP_STATUS_SUCCESS', 200 );
 define( 'HTTP_STATUS_CREATED', 201 );
+define( 'HTTP_STATUS_ACCEPTED', 202 );
 define( 'HTTP_STATUS_NO_CONTENT', 204 );
 define( 'HTTP_STATUS_NOT_MODIFIED', 304 );
+define( 'HTTP_STATUS_TEMPORARY_REDIRECT', 307 );
 define( 'HTTP_STATUS_BAD_REQUEST', 400 );
 define( 'HTTP_STATUS_UNAUTHORIZED', 401 );
 define( 'HTTP_STATUS_FORBIDDEN', 403 );

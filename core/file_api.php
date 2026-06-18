@@ -129,14 +129,16 @@ function file_get_display_name( $p_filename ) {
 function file_bug_attachment_count_cache( array $p_bug_ids ) {
 	global $g_cache_file_count;
 
-	if( empty( $p_bug_ids ) ) {
-		return;
-	}
-
 	$t_ids_to_search = array();
 	foreach( $p_bug_ids as $t_id ) {
 		$c_id = (int)$t_id;
-		$t_ids_to_search[$c_id] = $c_id;
+		if( !isset( $g_cache_file_count[$c_id] ) ) {
+			$t_ids_to_search[$c_id] = $c_id;
+		}
+	}
+	
+	if( empty( $t_ids_to_search ) ) {
+		return;
 	}
 
 	db_param_push();
@@ -238,6 +240,11 @@ function file_bug_has_attachments( $p_bug_id ) {
  * @internal Should not be used outside of File API.
  */
 function file_can_view_or_download( $p_action, $p_bug_id, $p_uploader_user_id, $p_bugnote_id = null ) {
+	# If user can't view the bug, then they can't access its attachments either
+	if( !access_has_bug_level( config_get( 'view_bug_threshold' ), $p_bug_id ) ) {
+		return false;
+	}
+
 	switch( $p_action ) {
 		case 'view':
 			$t_threshold_global = 'view_attachments_threshold';
@@ -304,7 +311,7 @@ function file_can_view_bugnote_attachments( $p_bugnote_id, $p_uploader_user_id =
 		$t_bug_id = (int)$p_bug_id;
 	}
 
-	return file_can_view_or_download( 'view', $t_bug_id, $p_uploader_user_id );
+	return file_can_view_or_download( 'view', $t_bug_id, $p_uploader_user_id, $p_bugnote_id );
 }
 
 /**
@@ -325,15 +332,21 @@ function file_can_download_bug_attachments( $p_bug_id, $p_uploader_user_id = nul
  *
  * @param int $p_bugnote_id       A bugnote identifier.
  * @param int $p_uploader_user_id The user who uploaded the attachment.
+ * @param int $p_bug_id           The bug id; if null (default), will be retrieved
+ *                                from bugnote record.
  *
  * @return bool
  * @throws ClientException
  */
-function file_can_download_bugnote_attachments( $p_bugnote_id, $p_uploader_user_id = null ) {
+function file_can_download_bugnote_attachments( $p_bugnote_id, $p_uploader_user_id = null, $p_bug_id = null ) {
 	if( $p_bugnote_id == 0 ) {
 		return true;
 	}
-	$t_bug_id = bugnote_get_field( $p_bugnote_id, 'bug_id' );
+	if( $p_bug_id === null ) {
+		$t_bug_id = bugnote_get_field( $p_bugnote_id, 'bug_id' );
+	} else {
+		$t_bug_id = (int)$p_bug_id;
+	}
 	return file_can_view_or_download( 'download', $t_bug_id, $p_uploader_user_id, $p_bugnote_id );
 }
 
@@ -372,7 +385,7 @@ function file_get_icon_url( $p_display_filename ) {
 
 	return array(
 		'url' => $t_file_type_icons[$t_ext],
-		'alt' => $t_ext == '?' ? lang_get( 'unknown_file_extension' ) : $t_ext
+		'alt' => $t_ext == '?' ? lang_get( 'unknown' ) : $t_ext
 	);
 }
 
@@ -479,11 +492,8 @@ function file_normalize_attachment_path( $p_diskfile, $p_project_id ) {
  */
 function file_get_visible_attachments( $p_bug_id ) {
 	$t_attachment_rows = bug_get_attachments( $p_bug_id );
-	$t_visible_attachments = array();
-
-	$t_attachments_count = count( $t_attachment_rows );
-	if( $t_attachments_count === 0 ) {
-		return $t_visible_attachments;
+	if( count( $t_attachment_rows ) === 0 ) {
+		return [];
 	}
 
 	$t_attachments = array();
@@ -807,7 +817,7 @@ function file_clean_name( $p_filename ) {
  * @param string $p_filepath File path.
  *
  * @return string
- * @throws Exception If no randomness source available.
+ * @throws Exception If no randomness source available (RandomException since PHP 8.2)
  */
 function file_generate_unique_name( $p_filepath ) {
 	do {
@@ -904,10 +914,6 @@ function file_is_name_unique( $p_name, $p_bug_id, $p_table = 'bug' ) {
 function file_add( $p_bug_id, array $p_file, $p_table = 'bug', $p_title = '', $p_desc = '', $p_user_id = null, $p_date_added = 0, $p_skip_bug_update = false, $p_bugnote_id = 0 ) {
 	$t_file_info = array();
 
-	if( !isset( $p_file['error'] ) ) {
-		$p_file['error'] = UPLOAD_ERR_OK;
-	}
-
 	if( !isset( $p_file['browser_upload'] ) ) {
 		$p_file['browser_upload'] = true;
 	}
@@ -927,23 +933,8 @@ function file_add( $p_bug_id, array $p_file, $p_table = 'bug', $p_title = '', $p
 	}
 
 	file_ensure_uploaded( $p_file );
+
 	$t_file_name = $p_file['name'];
-
-	if( strlen( $t_file_name ) > DB_FIELD_SIZE_FILENAME ) {
-		throw new ClientException(
-			sprintf( "Filename '%s' is too long", $t_file_name ),
-			ERROR_FILE_NAME_TOO_LONG,
-			array( $t_file_name )
-		);
-	}
-
-	if( !file_type_check( $t_file_name ) ) {
-		throw new ClientException(
-			sprintf( "File '%s' type not allowed", $t_file_name ),
-			ERROR_FILE_NOT_ALLOWED
-		);
-	}
-
 	$t_org_filename = $t_file_name;
 	$t_suffix_id = 1;
 
@@ -960,23 +951,8 @@ function file_add( $p_bug_id, array $p_file, $p_table = 'bug', $p_title = '', $p
 	}
 
 	$t_file_info['name'] = $t_file_name;
-	antispam_check();
-
 	$t_file_size = filesize( $t_tmp_file );
-	if( 0 == $t_file_size ) {
-		throw new ClientException(
-			sprintf( "File '%s' not uploaded", $t_file_name ),
-			ERROR_FILE_NO_UPLOAD_FAILURE );
-	}
-
 	$t_file_info['size'] = $t_file_size;
-
-	$t_max_file_size = (int)min( ini_get_number( 'upload_max_filesize' ), ini_get_number( 'post_max_size' ), config_get( 'max_file_size' ) );
-	if( $t_file_size > $t_max_file_size ) {
-		throw new ClientException(
-			sprintf( "File '%s' too big", $t_file_name ),
-			ERROR_FILE_TOO_BIG );
-	}
 
 	if( 'bug' == $p_table ) {
 		$t_project_id = bug_get_field( $p_bug_id, 'project_id' );
@@ -1119,6 +1095,7 @@ function file_is_uploading_enabled() {
  * @param int $p_user_id    A user identifier.
  *
  * @return bool True if user can upload, false otherwise
+ * @throws ClientException
  */
 function file_allow_project_upload( $p_project_id = null, $p_user_id = null ) {
 	if( null === $p_project_id ) {
@@ -1173,7 +1150,13 @@ function file_allow_bug_upload( $p_bug_id = null, $p_user_id = null, $p_project_
 	}
 
 	# Check the access level against the config setting
-	return access_has_project_level( config_get( 'upload_bug_file_threshold' ), $t_project_id, $p_user_id );
+	$t_upload_bug_file_threshold = config_get( 'upload_bug_file_threshold' );
+	if( null !== $p_bug_id ) {
+		# Existing issue: if user can't view it, then they can't add attachments
+		return access_has_bug_level( $t_upload_bug_file_threshold, $p_bug_id, $p_user_id );
+	}
+	# New issue - check against project
+	return access_has_project_level( $t_upload_bug_file_threshold, $t_project_id, $p_user_id );
 }
 
 /**
@@ -1205,28 +1188,78 @@ function file_ensure_valid_upload_path( $p_upload_path ) {
  * @throws ClientException
  */
 function file_ensure_uploaded( array $p_file ) {
-	switch( $p_file['error'] ) {
-		case UPLOAD_ERR_INI_SIZE:
-		case UPLOAD_ERR_FORM_SIZE:
-			throw new ClientException(
-				sprintf( "File '%s' too big", $p_file['name'] ),
-				ERROR_FILE_TOO_BIG );
 
-		case UPLOAD_ERR_PARTIAL:
-		case UPLOAD_ERR_NO_FILE:
-			throw new ClientException(
-				sprintf( "File '%s' upload failure", $p_file['name'] ),
-				ERROR_FILE_NO_UPLOAD_FAILURE );
-	}
+	antispam_check();
 
-	if( ( '' == $p_file['tmp_name'] ) || ( '' == $p_file['name'] ) ) {
+	$t_file_name = $p_file['name'] ?? null;
+
+	if( empty( $t_file_name ) ) {
 		throw new ClientException(
-			'File name or path is empty',
+			'File name is empty',
 			ERROR_FILE_NO_UPLOAD_FAILURE );
 	}
 
-	if( !is_readable( $p_file['tmp_name'] ) ) {
-		throw new ClientException( 'File is not readable', ERROR_UPLOAD_FAILURE );
+	if( isset( $p_file['error'] ) ) {
+		switch( $p_file['error'] ) {
+			case UPLOAD_ERR_OK:
+				break;
+
+			case UPLOAD_ERR_INI_SIZE:
+			case UPLOAD_ERR_FORM_SIZE:
+				throw new ClientException(
+					"File '$t_file_name' too big",
+					ERROR_FILE_TOO_BIG );
+
+			case UPLOAD_ERR_PARTIAL:
+			case UPLOAD_ERR_NO_FILE:
+			default:
+				throw new ClientException(
+					"File '$t_file_name' upload failure",
+					ERROR_FILE_NO_UPLOAD_FAILURE );
+		}
+	}
+
+	if( strlen( $t_file_name ) > DB_FIELD_SIZE_FILENAME ) {
+		throw new ClientException(
+			"Filename '$t_file_name' is too long",
+			ERROR_FILE_NAME_TOO_LONG,
+			[ $t_file_name ]
+		);
+	}
+
+	if( !file_type_check( $t_file_name ) ) {
+		throw new ClientException(
+			"File '$t_file_name' type not allowed",
+			ERROR_FILE_NOT_ALLOWED
+		);
+	}
+
+	$t_tmp_file = $p_file['tmp_name'] ?? null;
+
+	if( empty( $t_tmp_file ) ) {
+		throw new ClientException(
+			"File '$t_file_name' path is empty",
+			ERROR_FILE_NO_UPLOAD_FAILURE );
+	}
+
+	if( !is_readable( $t_tmp_file ) ) {
+		throw new ClientException(
+			"File '$t_file_name' is not readable",
+			ERROR_UPLOAD_FAILURE );
+	}
+
+	$t_file_size = filesize( $t_tmp_file );
+
+	if( 0 == $t_file_size ) {
+		throw new ClientException(
+			"File '$t_file_name' not uploaded",
+			ERROR_FILE_NO_UPLOAD_FAILURE );
+	}
+
+	if( $t_file_size > file_get_max_file_size() ) {
+		throw new ClientException(
+			"File '$t_file_name' too big",
+			ERROR_FILE_TOO_BIG );
 	}
 }
 

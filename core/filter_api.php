@@ -117,6 +117,12 @@ $g_cache_filter_db_rows = array();
 $g_cache_filter_subquery = array();
 
 /**
+ * Cache of current filter for given project and user.
+ * @global array $g_filter_project_current_cache
+ */
+$g_cache_filter_project_current = array();
+
+/**
  * Initialize the filter API with the current filter.
  * @param array $p_filter The filter to set as the current filter.
  */
@@ -215,6 +221,10 @@ function filter_get_url( array $p_custom_filter ) {
 
 	if( !filter_field_is_any( $p_custom_filter[FILTER_PROPERTY_SEVERITY] ) ) {
 		$t_query[] = filter_encode_field_and_value( FILTER_PROPERTY_SEVERITY, $p_custom_filter[FILTER_PROPERTY_SEVERITY] );
+	}
+
+	if( !filter_field_is_any( $p_custom_filter[FILTER_PROPERTY_REPRODUCIBILITY] ) ) {
+		$t_query[] = filter_encode_field_and_value( FILTER_PROPERTY_REPRODUCIBILITY, $p_custom_filter[FILTER_PROPERTY_REPRODUCIBILITY] );
 	}
 
 	if( !filter_field_is_any( $p_custom_filter[FILTER_PROPERTY_RESOLUTION] ) ) {
@@ -408,13 +418,13 @@ function filter_encode_field_and_value( $p_field_name, $p_field_value, $p_field_
 		$t_count = count( $p_field_value );
 		if( $t_count > 1 || $p_field_type == FILTER_TYPE_MULTI_STRING || $p_field_type == FILTER_TYPE_MULTI_INT ) {
 			foreach( $p_field_value as $t_value ) {
-				$t_query_array[] = urlencode( $p_field_name . '[]' ) . '=' . urlencode( $t_value );
+				$t_query_array[] = string_url( $p_field_name . '[]' ) . '=' . string_url( $t_value );
 			}
 		} else if( $t_count == 1 ) {
-			$t_query_array[] = urlencode( $p_field_name ) . '=' . urlencode( $p_field_value[0] );
+			$t_query_array[] = string_url( $p_field_name ) . '=' . string_url( $p_field_value[0] );
 		}
 	} else {
-		$t_query_array[] = urlencode( $p_field_name ) . '=' . urlencode( $p_field_value );
+		$t_query_array[] = string_url( $p_field_name ) . '=' . string_url( (string)$p_field_value );
 	}
 
 	return implode( '&', $t_query_array );
@@ -720,6 +730,7 @@ function filter_ensure_valid_filter( array $p_filter_arr ) {
 	$t_array_values_list = array(
 		FILTER_PROPERTY_CATEGORY_ID => 'string',
 		FILTER_PROPERTY_SEVERITY => 'int',
+		FILTER_PROPERTY_REPRODUCIBILITY => 'int',
 		FILTER_PROPERTY_STATUS => 'int',
 		FILTER_PROPERTY_REPORTER_ID => 'int',
 		FILTER_PROPERTY_HANDLER_ID => 'int',
@@ -761,13 +772,24 @@ function filter_ensure_valid_filter( array $p_filter_arr ) {
 						$p_filter_arr['custom_fields'][$t_cfid],
 					);
 				}
+
 				$t_checked_array = array();
-				foreach( $p_filter_arr['custom_fields'][$t_cfid] as $t_filter_value ) {
-					$t_filter_value = stripslashes( $t_filter_value );
-					if( ( $t_filter_value === 'any' ) || ( $t_filter_value === '[any]' ) ) {
-						$t_filter_value = META_FILTER_ANY;
+
+				# Special handling for date custom fields which have a special array format
+				$t_def = custom_field_get_definition( $t_cfid );
+				if( $t_def['type'] == CUSTOM_FIELD_TYPE_DATE ) {
+					# All array elements should be numeric
+					# - 0 is one of the CUSTOM_FIELD_DATE_xxx constants
+					# - 1 & 2 are unix timestamps
+					$t_checked_array = array_map( 'intval', $p_filter_arr['custom_fields'][$t_cfid] );
+				} else {
+					foreach( $p_filter_arr['custom_fields'][$t_cfid] as $t_filter_value ) {
+						$t_filter_value = stripslashes( $t_filter_value );
+						if( ( $t_filter_value === 'any' ) || ( $t_filter_value === '[any]' ) ) {
+							$t_filter_value = META_FILTER_ANY;
+						}
+						$t_checked_array[] = $t_filter_value;
 					}
-					$t_checked_array[] = $t_filter_value;
 				}
 				$p_filter_arr['custom_fields'][$t_cfid] = $t_checked_array;
 			}
@@ -878,6 +900,7 @@ function filter_get_default_array( $p_view_type = null ) {
 		'_view_type' => $t_view_type,
 		FILTER_PROPERTY_CATEGORY_ID => $t_meta_filter_any_array,
 		FILTER_PROPERTY_SEVERITY => $t_meta_filter_any_array,
+		FILTER_PROPERTY_REPRODUCIBILITY => $t_meta_filter_any_array,
 		FILTER_PROPERTY_STATUS => $t_meta_filter_any_array,
 		FILTER_PROPERTY_HIGHLIGHT_CHANGED => $t_default_show_changed,
 		FILTER_PROPERTY_REPORTER_ID => $t_meta_filter_any_array,
@@ -1345,13 +1368,13 @@ function filter_draw_selection_area() {
 					<form method="post" action="view_all_set.php">
 						<input type="hidden" name="type" value="<?php echo FILTER_ACTION_LOAD ?>" />
 						<select id="filter-bar-query-id" class="input-xs">
-							<option value="-1"></option>
+							<option value="-1">&nbsp;</option>
 							<?php
 							$t_source_query_id = isset( $t_filter['_source_query_id'] ) ? (int)$t_filter['_source_query_id'] : -1;
 							foreach( $t_stored_queries_arr as $t_query_id => $t_query_name ) {
 								echo '<option value="' . $t_query_id . '" ';
 								check_selected( $t_query_id, $t_source_query_id );
-								echo '>' . string_display_line( $t_query_name ) . '</option>';
+								echo '>' . string_attribute( $t_query_name ) . '</option>';
 							}
 							?>
 						</select>
@@ -1422,13 +1445,13 @@ function filter_draw_selection_area() {
 							<input type="hidden" name="type" value="<?php echo FILTER_ACTION_LOAD ?>" />
 							<label><?php echo lang_get( 'load' ) ?>
 								<select class="input-s" name="source_query_id">
-									<option value="-1"></option>
+									<option value="-1">&nbsp;</option>
 									<?php
 									$t_source_query_id = isset( $t_filter['_source_query_id'] ) ? (int)$t_filter['_source_query_id'] : -1;
 									foreach( $t_stored_queries_arr as $t_query_id => $t_query_name ) {
 										echo '<option value="' . $t_query_id . '" ';
 										check_selected( $t_query_id, $t_source_query_id );
-										echo '>' . string_display_line( $t_query_name ) . '</option>';
+										echo '>' . string_attribute( $t_query_name ) . '</option>';
 									}
 									?>
 								</select>
@@ -1649,6 +1672,8 @@ function filter_db_get_filter_string( $p_filter_id, $p_user_id = null ) {
  * @return integer|null
  */
 function filter_db_get_project_current( $p_project_id = null, $p_user_id = null ) {
+	global $g_cache_filter_project_current;
+
 	if( null === $p_project_id ) {
 		$c_project_id = helper_get_current_project();
 	} else {
@@ -1658,6 +1683,12 @@ function filter_db_get_project_current( $p_project_id = null, $p_user_id = null 
 		$c_user_id = auth_get_current_user_id();
 	} else {
 		$c_user_id = (int)$p_user_id;
+	}
+	
+	if( isset( $g_cache_filter_project_current[$c_project_id][$c_user_id] ) ) {
+		return ( $g_cache_filter_project_current[$c_project_id][$c_user_id] === false )
+			? null
+			: $g_cache_filter_project_current[$c_project_id][$c_user_id];
 	}
 
 	# we store current filters for each project with a special project index
@@ -1669,9 +1700,11 @@ function filter_db_get_project_current( $p_project_id = null, $p_user_id = null 
 	$t_result = db_query( $t_query, array( $c_user_id, $t_filter_project_id, '' ) );
 
 	if( $t_row = db_fetch_array( $t_result ) ) {
+		$g_cache_filter_project_current[$c_project_id][$c_user_id] = $t_row['id'];
 		return $t_row['id'];
 	}
 
+	$g_cache_filter_project_current[$c_project_id][$c_user_id] = false;
 	return null;
 }
 
@@ -1751,6 +1784,27 @@ function filter_db_delete_current_filters() {
 	db_param_push();
 	$t_query = 'DELETE FROM {filters} WHERE project_id<=' . db_param() . ' AND name=' . db_param();
 	db_query( $t_query, array( $t_all_id, '' ) );
+}
+
+/**
+ * Delete filters owned by the specified user.
+ *
+ * This function is called when a user is deleted to clean up orphaned filters.
+ * By default, shared (public) filters are preserved since they may be used by other users.
+ *
+ * @param int  $p_user_id       A valid user identifier.
+ * @param bool $p_delete_shared Whether to also delete shared (public) filters. Default false.
+ * @return void
+ */
+function filter_db_delete_user_filters( $p_user_id, $p_delete_shared = false ) {
+	db_param_push();
+	if( $p_delete_shared ) {
+		$t_query = 'DELETE FROM {filters} WHERE user_id=' . db_param();
+		db_query( $t_query, array( (int)$p_user_id ) );
+	} else {
+		$t_query = 'DELETE FROM {filters} WHERE user_id=' . db_param() . ' AND is_public=' . db_param();
+		db_query( $t_query, array( (int)$p_user_id, false ) );
+	}
 }
 
 /**
@@ -2025,6 +2079,7 @@ function filter_gpc_get( ?array $p_filter = null ): array {
 	$f_os = gpc_get( FILTER_PROPERTY_OS, $t_filter[FILTER_PROPERTY_OS] );
 	$f_os_build = gpc_get( FILTER_PROPERTY_OS_BUILD, $t_filter[FILTER_PROPERTY_OS_BUILD] );
 	$f_show_severity = gpc_get( FILTER_PROPERTY_SEVERITY, $t_filter[FILTER_PROPERTY_SEVERITY] );
+	$f_show_reproducibility = gpc_get( FILTER_PROPERTY_REPRODUCIBILITY, $t_filter[FILTER_PROPERTY_REPRODUCIBILITY] );
 	$f_show_status = gpc_get( FILTER_PROPERTY_STATUS, $t_filter[FILTER_PROPERTY_STATUS] );
 	$f_hide_status = gpc_get( FILTER_PROPERTY_HIDE_STATUS, $t_filter[FILTER_PROPERTY_HIDE_STATUS] );
 	$f_reporter_id = gpc_get( FILTER_PROPERTY_REPORTER_ID, $t_filter[FILTER_PROPERTY_REPORTER_ID] );
@@ -2160,7 +2215,7 @@ function filter_gpc_get( ?array $p_filter = null ): array {
 				$f_custom_fields_data[$t_cfid] = array();
 
 				# Get date control property
-				$t_control = gpc_get_string( 'custom_field_' . $t_cfid . '_control', null );
+				$t_control = gpc_get_int( 'custom_field_' . $t_cfid . '_control', null );
 				$f_custom_fields_data[$t_cfid][0] = $t_control;
 
 				$t_one_day = 86399;
@@ -2263,6 +2318,7 @@ function filter_gpc_get( ?array $p_filter = null ): array {
 	$t_filter_input['_view_type'] 							= $f_view_type;
 	$t_filter_input[FILTER_PROPERTY_CATEGORY_ID] 			= $f_show_category;
 	$t_filter_input[FILTER_PROPERTY_SEVERITY] 				= $f_show_severity;
+	$t_filter_input[FILTER_PROPERTY_REPRODUCIBILITY] 				= $f_show_reproducibility;
 	$t_filter_input[FILTER_PROPERTY_STATUS] 					= $f_show_status;
 	$t_filter_input[FILTER_PROPERTY_ISSUES_PER_PAGE] 		= $f_per_page;
 	$t_filter_input[FILTER_PROPERTY_HIGHLIGHT_CHANGED] 		= $f_highlight_changed;
@@ -2425,7 +2481,7 @@ function filter_print_view_type_toggle( $p_url, $p_view_type ) {
 	}
 
 	echo '<li>';
-	printf( '<a href="%s">%s</i>&#160;&#160;%s</a>',
+	printf( '<a href="%s">%s&#160;&#160;%s</a>',
 		$t_url,
 		icon_get( $t_icon, 'ace-icon' ),
 		lang_get( $t_lang_string )

@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,3 +53,5 @@ $s_plugin_format_process_markdown = 'Obdelava Markdown';
 $s_plugin_format_process_markdown_info = 'Oblikovanje s podporo za Markdown, skladnja oblikovanja besedila, zasnovana tako, da jo je mogoče pretvoriti v HTML.';
 $s_plugin_format_enabled = 'Vklopljeno';
 $s_plugin_format_disabled = 'Izklopljeno';
+$s_plugin_format_syntax_highlighting = 'Označevanje skladnje za kodne bloke';
+$s_plugin_format_syntax_highlighting_info = 'Označevanje skladnje deluje samo, če je aktivno »Obdelava označevanja«';

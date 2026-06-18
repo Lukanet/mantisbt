@@ -24,11 +24,13 @@
  * @link http://www.mantisbt.org
  *
  * @uses database_api.php
+ * @uses string_api.php
  *
  * @noinspection PhpUnused
  */
 
 require_api( 'database_api.php' );
+require_api( 'string_api.php' );
 
 /**
  * Legacy pre-1.2 date function used for upgrading from datetime to integer
@@ -838,7 +840,7 @@ function install_print_unserialize_errors_csv( $p_table, $p_data ) {
 
 	# CSV download (as data URL)
 ?>
-	<a href="data:text/csv;charset=UTF-8,<?php echo rawurlencode( $t_csv ) ?>"
+	<a href="data:text/csv;charset=UTF-8,<?php echo string_url( $t_csv ) ?>"
 	   download="errors_<?php echo $p_table; ?>.csv"
 	   class="btn btn-primary btn-white btn-round"
 	>
@@ -862,4 +864,25 @@ function install_category_status_default() {
 	);
 
 	return $t_update_query->execute() ? 2 : 1;
+}
+
+/**
+ * Delete orphaned private filters owned by users that no longer exist.
+ *
+ * Prior to the fix for #37004, deleting a user did not clean up their filters.
+ * This migration removes private filters whose owner no longer exists in the
+ * user table.
+ *
+ * Shared (public) filters are preserved since they may be used by other users.
+ *
+ * @return int 2 on success, 1 on failure.
+ */
+function install_delete_orphaned_private_filters() {
+	$t_query = new DbQuery();
+	$t_query->sql( 'DELETE FROM {filters}'
+		. ' WHERE is_public = ' . $t_query->param( false )
+		. ' AND user_id NOT IN (SELECT id FROM {user})'
+	);
+
+	return $t_query->execute() ? 2 : 1;
 }

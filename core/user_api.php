@@ -88,12 +88,12 @@ function user_cache_row( $p_user_id, $p_trigger_errors = true ) {
 		user_cache_array_rows( array( $c_user_id ) );
 
 		/** @noinspection PhpConditionAlreadyCheckedInspection */
-		if( !isset( $g_cache_user[$c_user_id] ) ) {
+		if( empty( $g_cache_user[$c_user_id] ) ) {
 			if( $p_trigger_errors ) {
 				throw new ClientException(
-					sprintf( "User id '%d' not found.", (integer)$p_user_id ),
+					sprintf( "User id '%d' not found.", (int)$p_user_id ),
 					ERROR_USER_BY_ID_NOT_FOUND,
-					array( (integer)$p_user_id )
+					array( (int)$p_user_id )
 				);
 			}
 
@@ -255,7 +255,7 @@ function user_exists( $p_user_id ) {
  * @throws ClientException if the user does not exist
  */
 function user_ensure_exists( $p_user_id ) {
-	$c_user_id = (integer)$p_user_id;
+	$c_user_id = (int)$p_user_id;
 
 	if( !user_exists( $c_user_id ) ) {
 		throw new ClientException( "User $c_user_id not found", ERROR_USER_BY_ID_NOT_FOUND, array( $c_user_id ) );
@@ -653,6 +653,20 @@ function user_create( $p_username, $p_password, $p_email = '',
 		$p_access_level = config_get( 'default_new_account_access_level' );
 	}
 
+	if( ON == config_get_global( 'use_ldap_realname' ) ) {
+		$t_realname = ldap_realname_from_username( $p_username );
+		if( !empty( $t_realname ) ) {
+			$p_realname = $t_realname;
+		}
+	}
+
+	if( ON == config_get_global( 'use_ldap_email' ) ) {
+		$t_email = ldap_email_from_username( $p_username );
+		if( !empty( $t_email ) ) {
+			$p_email = $t_email;
+		}
+	}
+
 	$t_password = auth_process_plain_password( $p_password );
 
 	$c_enabled = (bool)$p_enabled;
@@ -814,6 +828,9 @@ function user_delete( $p_user_id ) {
 
 	# Revoke all API tokens
 	api_token_revoke_all( $p_user_id );
+
+	# Remove user-owned filters
+	filter_db_delete_user_filters( $p_user_id );
 
 	# Remove account
 	db_param_push();
@@ -1129,7 +1146,7 @@ function user_get_field( $p_user_id, $p_field_name ) {
  */
 function user_get_email( $p_user_id ) {
 	$t_email = '';
-	if( LDAP == config_get_global( 'login_method' ) && ON == config_get_global( 'use_ldap_email' ) ) {
+	if( ON == config_get_global( 'use_ldap_email' ) ) {
 		$t_email = ldap_email( $p_user_id );
 	}
 	if( is_blank( $t_email ) ) {
@@ -1168,7 +1185,7 @@ function user_get_username( $p_user_id ) {
 function user_get_realname( $p_user_id ) {
 	$t_realname = '';
 
-	if( LDAP == config_get_global( 'login_method' ) && ON == config_get_global( 'use_ldap_realname' ) ) {
+	if( ON == config_get_global( 'use_ldap_realname' ) ) {
 		$t_realname = ldap_realname( $p_user_id );
 	}
 
@@ -1901,8 +1918,10 @@ function user_set_password( $p_user_id, $p_password, $p_allow_protected = false 
 	# When the password is changed, invalidate the cookie to expire sessions that
 	# may be active on all browsers.
 	$c_cookie_string = auth_generate_unique_cookie_string();
+
 	# Delete token for password activation if there is any
 	token_delete( TOKEN_ACCOUNT_ACTIVATION, $p_user_id );
+	token_delete( TOKEN_ACCOUNT_CHANGE_EMAIL, $p_user_id );
 
 	$c_password = auth_process_plain_password( $p_password );
 
@@ -1916,15 +1935,15 @@ function user_set_password( $p_user_id, $p_password, $p_allow_protected = false 
 }
 
 /**
- * Set the user's email after checking that it is valid.
+ * Validate the user's email address.
  *
  * @param int    $p_user_id A valid user identifier.
  * @param string $p_email   An email address to set.
  *
- * @return bool
- * @throws ClientException
+ * @return void
+ * @throws ClientException If mail is not valid.
  */
-function user_set_email( $p_user_id, $p_email ) {
+function user_ensure_email_valid( $p_user_id, $p_email ) {
 	$p_email = trim( $p_email );
 
 	email_ensure_valid( $p_email );
@@ -1934,8 +1953,20 @@ function user_set_email( $p_user_id, $p_email ) {
 	if( strcasecmp( $t_old_email, $p_email ) != 0 ) {
 		user_ensure_email_unique( $p_email );
 	}
+}
 
-	return user_set_field( $p_user_id, 'email', $p_email );
+/**
+ * Set the user's email after checking that it is valid.
+ *
+ * @param int    $p_user_id A valid user identifier.
+ * @param string $p_email   An email address to set.
+ *
+ * @return void
+ * @throws ClientException
+ */
+function user_set_email( $p_user_id, $p_email ) {
+	user_ensure_email_valid( $p_user_id, $p_email );
+	user_set_field( $p_user_id, 'email', $p_email );
 }
 
 /**

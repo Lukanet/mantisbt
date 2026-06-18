@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -195,7 +195,6 @@ $s_prefix_for_deleted_users = 'käyttäjä';
 $s_administrator = 'pääkäyttäjä';
 $s_myself = 'Minä';
 $s_default_access_level = 'Oletuskäyttäjätaso';
-$s_issue_status_percentage = 'Tapahtuman tilan prosenttiosuus';
 $s_access_levels_enum_string = '10:seuraaja,25:raportoija,40:päivittäjä,55:kehittäjä,70:ylläpitäjä,90:pääkäyttäjä';
 $s_no_access = 'ei pääsyä';
 $s_project_status_enum_string = '10:kehitysversio,30:julkaisuversio,50:vakaa versio,70:vanhentunut versio';
@@ -458,7 +457,6 @@ $s_last_edited = 'Viimeksi muokattu:';
 $s_hide_content = 'Piilota sisältö';
 $s_show_content = 'Näytä sisältö';
 $s_file_icon_description = '%1$s tiedostokuvake';
-$s_unknown_file_extension = 'tuntematon';
 $s_total_queries_executed = 'Kyselyjä suoritettu yhteensä: %1$d';
 $s_unique_queries_executed = 'Yksilöllisiä kyselyjä suoritettu: %1$d';
 $s_page_execution_time = 'Sivun suoritusaika: %1$s sekuntia';
@@ -1270,3 +1268,4 @@ $s_filter_all = 'Kaikki';
 $s_filter_new = 'Uusi';
 $s_filter_unused_tags = 'Ei käytössä';
 $s_filter_unused = 'Ei käytössä';
+$s_unknown = 'tuntematon';

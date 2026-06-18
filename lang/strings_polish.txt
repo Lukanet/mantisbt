@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,6 +43,7 @@
  * @author BeginaFelicysym
  * @author Chrumps
  * @author Cysioland
+ * @author Dawidg81
  * @author Debeet
  * @author Dzidek
  * @author Expert3222
@@ -216,7 +217,6 @@ $s_prefix_for_deleted_users = 'użytkownik';
 $s_administrator = 'administrator';
 $s_myself = 'Ja';
 $s_default_access_level = 'Domyślny poziom dostępu';
-$s_issue_status_percentage = 'Status procentowy zgłoszenia';
 $s_access_levels_enum_string = '10:obserwator,25:zgłaszający,40:aktualizujący,55:wykonawca,70:zarządca,90:administrator';
 $s_no_access = 'brak dostępu';
 $s_project_status_enum_string = '10:tworzony,30:ukończony,50:stabilny,70:zarzucony';
@@ -494,7 +494,6 @@ $s_last_edited = 'Ostatnio edytowane:';
 $s_hide_content = 'Ukryj zawartość';
 $s_show_content = 'Pokaż zawartość';
 $s_file_icon_description = '%1$s ikona pliku';
-$s_unknown_file_extension = 'nieznana';
 $s_webmaster_contact_information = 'Skontaktuj się z <a href="mailto:%1$s" title="Napisz email do webmastera">administratorem</a> w celu uzyskania pomocy';
 $s_total_queries_executed = '%1$d wszystkich wykonanych zapytań.';
 $s_unique_queries_executed = '%1$d wykonanych unikalnych zapytań.';
@@ -668,7 +667,7 @@ $s_plugin = 'Wtyczka';
 $s_plugins_installed = 'Zainstalowane wtyczki';
 $s_plugins_available = 'Dostępne wtyczki';
 $s_plugins_missing = 'Brakujące lub nieprawidłowe wtyczki';
-$s_plugins_missing_description = 'Wtyczki na poniższej liście są zarejestrowane, ale nie znaleziono ich kodu źródłowego ani nie można go było załadować z „ %s ”.<br> Spróbuj je ponownie zainstalować lub usunąć.';
+$s_plugins_missing_description = 'Wtyczki z poniższej listy są albo<ul><li>zarejestrowane, ale nie znaleziono ich kodu źródłowego ani nie można go było załadować z „%s”</li><li>zainstalowane, ale nie można ich uruchomić.</li></ul>Spróbuj je ponownie zainstalować lub usunąć.';
 $s_plugin_description = 'Opis';
 $s_plugin_problem_description = 'Opis problemu';
 $s_plugin_author = 'Autor: %1$s';
@@ -694,7 +693,7 @@ $s_plugin_invalid_status_message = 'Następujące wymagane właściwości nie s�
 $s_plugin_missing_description = 'Brak wtyczki';
 $s_plugin_missing_status_message = 'Wtyczka jest zainstalowana w bazie danych Mantis, ale nie można jej załadować.';
 $s_plugin_missing_class_description = 'Brak klasy bazowej wtyczki';
-$s_plugin_missing_class_status_message = 'Znaleziono katalog dla tej wtyczki, ale nie było w nim odpowiadającego kodu wtyczki. Upewnij się, że nazwa katalogu jest taka sama jak nazwa bazowa wtyczki (z uwzględnieniem wielkości liter)';
+$s_plugin_missing_class_status_message = 'Znaleziono katalog dla tej wtyczki, ale nie było w nim odpowiadającego kodu wtyczki. Upewnij się, że: nazwa katalogu jest taka sama jak nazwa bazowa wtyczki "%1$s" (z uwzględnieniem wielkości liter), plik PHP z tą samą nazwą znajduje się w tymże katalogu, oraz definiuje Klasę o nazwie "%2$s" rozszerzającą klasę MantisPlugin.';
 $s_project_added_msg = 'Projekt został pomyślnie dodany...';
 $s_category_added_msg = 'Kategoria została pomyślnie dodana...';
 $s_category_deleted_msg = 'Kategoria została pomyślnie usunięta...';
@@ -1181,7 +1180,7 @@ $s_tag_update = 'Aktualizuj znacznik %1$s';
 $s_tag_update_return = 'Wróć do tagu';
 $s_tag_update_button = 'Edytuj tag';
 $s_tag_delete_button = 'Usuń tag';
-$s_tag_delete_message = 'Czy jesteś pewien, że chesz usunąć ten tag?';
+$s_tag_delete_message = 'Czy jesteś pewien, że chcesz usunąć tag "%1$s"?';
 $s_tag_existing = 'Istniejące tagi';
 $s_tag_none_attached = 'Brak powiązanych tagów.';
 $s_tag_attach = 'Powiąż';
@@ -1281,7 +1280,7 @@ $MANTIS_ERROR[ERROR_FILE_DISALLOWED] = 'Typ przesyłanego pliku nie jest dozwolo
 $MANTIS_ERROR[ERROR_NO_DIRECTORY] = 'Podany katalog nie istnieje. Sprawdź ustawienia projektu.';
 $MANTIS_ERROR[ERROR_DUPLICATE_PROJECT] = 'Istnieje już projekt o takiej nazwie.';
 $MANTIS_ERROR[ERROR_EMPTY_FIELD] = 'Wymagane pole „%1$s” nie zostało wypełnione. Sprawdź wprowadzone dane.';
-$MANTIS_ERROR[ERROR_INVALID_FIELD_VALUE] = 'Nieprawidłowa wartość dla \'%1$s\'';
+$MANTIS_ERROR[ERROR_INVALID_FIELD_VALUE] = 'Nieprawidłowa wartość dla "%1$s"';
 $MANTIS_ERROR[ERROR_PROTECTED_ACCOUNT] = 'Konto jest zabezpieczone. Nie możesz wykonać żądanej operacji, dopóki zabezpieczenie jest aktywne.';
 $MANTIS_ERROR[ERROR_ACCESS_DENIED] = 'Brak dostępu.';
 $MANTIS_ERROR[ERROR_UPLOAD_FAILURE] = 'Przesyłanie nie powiodło się. Plik nie mógł zostać odczytany przez MantisBT. Sprawdź konfigurację serwera.';
@@ -1303,7 +1302,7 @@ $MANTIS_ERROR[ERROR_PROJECT_NAME_NOT_UNIQUE] = 'Projekt o tej nazwie już istnie
 $MANTIS_ERROR[ERROR_PROJECT_NAME_INVALID] = 'Podano nieprawidłową nazwę projektu. Nazwa projektu nie może być pusta.';
 $MANTIS_ERROR[ERROR_PROJECT_RECURSIVE_HIERARCHY] = 'Ta operacja spowodowałaby pętlę w hierarchii podprojektów.';
 $MANTIS_ERROR[ERROR_PROJECT_SUBPROJECT_DUPLICATE] = 'Projekt „ %1$s ” jest już podprojektem „ %2$s ”.';
-$MANTIS_ERROR[ERROR_PROJECT_SUBPROJECT_NOT_FOUND] = 'Projekt „ %1$s ” nie jest podprojektem „ %2$s ”.';
+$MANTIS_ERROR[ERROR_PROJECT_SUBPROJECT_NOT_FOUND] = 'Projekt „%1$s” nie jest podprojektem „%2$s”.';
 $MANTIS_ERROR[ERROR_USER_BY_NAME_NOT_FOUND] = 'Brak użytkownika o nazwie „%1$s”.';
 $MANTIS_ERROR[ERROR_USER_BY_ID_NOT_FOUND] = 'Brak użytkownika o id „%1$d”.';
 $MANTIS_ERROR[ERROR_USER_BY_EMAIL_NOT_FOUND] = 'Nie znaleziono użytkownika o adresie e-mail „ %1$s ”.';
@@ -1331,7 +1330,7 @@ $MANTIS_ERROR[ERROR_BUG_DUPLICATE_SELF] = 'Nie można wskazać jako kopii zgłos
 $MANTIS_ERROR[ERROR_BUG_REVISION_NOT_FOUND] = 'Nie znaleziono wersji z błędem.';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_NOT_FOUND] = 'Pole własne nie znalezione';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_NAME_NOT_UNIQUE] = 'Ta nazwa jest już używana.';
-$MANTIS_ERROR[ERROR_CUSTOM_FIELD_NAME_INVALID] = 'Nieprawidłowa nazwa pola niestandardowego „ %1$s ”: przecinki są niedozwolone. Zobacz sekcję „Lokalizujące nazwy pól niestandardowych” w Podręczniku administratora jako obejście.';
+$MANTIS_ERROR[ERROR_CUSTOM_FIELD_NAME_INVALID] = 'Nieprawidłowa nazwa pola niestandardowego „%1$s”: przecinki są niedozwolone. Zobacz sekcję „Lokalizowanie nazw pól niestandardowych” w Podręczniku administratora jako obejście.';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_IN_USE] = 'Przynajmniej jeden projekt używa jeszcze tego pola.';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_INVALID_VALUE] = 'Błędna wartość pola „%1$s”.';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_INVALID_DEFINITION] = 'Błędna definicja pola dodatkowego.';
@@ -1374,7 +1373,7 @@ $MANTIS_ERROR[ERROR_SIGNUP_NOT_MATCHING_CAPTCHA] = 'Potwierdzenie nie pasuje. Pr
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NOT_ENABLED] = 'Funkcja \'Zapomniałem hasła\' jest niedostępna.';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NO_EMAIL_SPECIFIED] = 'Musisz podać adres email, aby zresetować hasło.';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NOT_MATCHING_DATA] = 'Wprowadzone dane nie pasują do żadnego zarejestrowanego konta!';
-$MANTIS_ERROR[ERROR_LOST_PASSWORD_CONFIRM_HASH_INVALID] = 'Adres potwierdzający jest nieprawidłowy lub został już użyty. Proszę zapisać się ponownie.';
+$MANTIS_ERROR[ERROR_LOST_PASSWORD_CONFIRM_HASH_INVALID] = 'Adres potwierdzający jest nieprawidłowy lub został już użyty.';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_MAX_IN_PROGRESS_ATTEMPTS_REACHED] = 'Osiągnięto maksymalną liczbę oczekujących żądań. Proszę skonaktować się z administratorem.';
 $MANTIS_ERROR[ERROR_USER_CHANGE_LAST_ADMIN] = 'Nie możesz usunąć lub zmienić poziomu dostępu jedynego administratora systemu. Przeprowadzenie operacji, którą próbujesz wykonać będzie możliwe dopiero po utworzeniu innego konta administratora.';
 $MANTIS_ERROR[ERROR_PAGE_REDIRECTION] = 'Błąd przekierowania, prosze upenić się, że spacje nie występują poza blokiem PHP (&lt;?php ?&gt;) w plikach config_inc.php lub custom_*.php.';
@@ -1395,7 +1394,7 @@ $MANTIS_ERROR[ERROR_PLUGIN_INSTALL_FAILED] = 'Instalacja wtyczki nie powiodła s
 $MANTIS_ERROR[ERROR_PLUGIN_UPGRADE_FAILED] = 'Błąd aktualizacji schematu wtyczki w bloku %1$s.';
 $MANTIS_ERROR[ERROR_PLUGIN_UPGRADE_NEEDED] = 'W celu otwarcia strony, musisz zaktualizować wtyczkę „%1$s”.';
 $MANTIS_ERROR[ERROR_PLUGIN_INVALID_PAGE] = 'Format określonej strony wtyczki " %1$s " jest nieprawidłowy. Musi być zgodny z "Plugin[/path/to]/page".';
-$MANTIS_ERROR[ERROR_PLUGIN_INVALID_FILE] = 'Format określonego pliku wtyczki " %1$s " jest nieprawidłowy. Musi być zgodny z "Plugin[/path/to]/file[.ext]".';
+$MANTIS_ERROR[ERROR_PLUGIN_INVALID_FILE] = 'Format określonego pliku wtyczki "%1$s" jest nieprawidłowy. Musi być zgodny z formatem "Plugin[/path/to]/file[.ext]".';
 $MANTIS_ERROR[ERROR_PLUGIN_GENERIC] = 'Wystąpił nieznany błąd „%1$s” w trakcie wykonywania kodu wtyczki „%2$s”.';
 $MANTIS_ERROR[ERROR_COLUMNS_DUPLICATE] = 'Pole „%1$s” zawiera dwa razy kolumnę „%2$s”.';
 $MANTIS_ERROR[ERROR_COLUMNS_INVALID] = 'Pole „%1$s” zawiera nieprawidłowe pole „%2$s”.';
@@ -1413,7 +1412,7 @@ $MANTIS_ERROR[ERROR_DISPLAY_USER_ERROR_INLINE] = 'Ostrzeżenie: system jest skon
 $MANTIS_ERROR[ERROR_TYPE_MISMATCH] = 'Niezgodność typu danych. Włącz szczegółowe komunikaty o błędach, aby uzyskać więcej informacji.';
 $MANTIS_ERROR[ERROR_BUG_CONFLICTING_EDIT] = 'Ten problem został zaktualizowany przez innego użytkownika, wróć do problemu i prześlij zmiany ponownie.';
 $MANTIS_ERROR[ERROR_SPAM_SUSPECTED] = 'Osiągnąłeś dozwolony limit aktywności %d wydarzeń w ciągu ostatnich %d sekund. Twoja akcja została zablokowana w celu uniknięcia spamu. Spróbuj ponownie później.';
-$MANTIS_ERROR[ERROR_FIELD_TOO_LONG] = 'Pole „ %1$s ” musi być krótsze lub mieć długość równą %2$d znaków.';
+$MANTIS_ERROR[ERROR_FIELD_TOO_LONG] = 'Maksymalna długość pola „%1$s” wynosi %2$d znaków.';
 $MANTIS_ERROR[ERROR_API_TOKEN_NAME_NOT_UNIQUE] = 'Nazwa tokenu API " %s " jest już używana. Wróć i wybierz inny.';
 $MANTIS_ERROR[ERROR_LOGFILE_NOT_WRITABLE] = 'Plik określony w $g_log_destination " %s " nie jest zapisywalny.';
 $MANTIS_ERROR[ERROR_MONITOR_ACCESS_TOO_LOW] = 'Dodany użytkownik nie ma wystarczających uprawnień dostępu, aby monitorować ten problem.';
@@ -1456,3 +1455,4 @@ $s_filter_all = 'WSZYSCY';
 $s_filter_new = 'NOWY';
 $s_filter_unused_tags = 'NIEUŻYWANY';
 $s_filter_unused = 'NIEUŻYWANY';
+$s_unknown = 'nieznana';

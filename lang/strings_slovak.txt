@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -204,7 +204,6 @@ $s_prefix_for_deleted_users = 'užívateľ';
 $s_administrator = 'administrátor';
 $s_myself = 'Ja sám';
 $s_default_access_level = 'Štandardné prístupové práva';
-$s_issue_status_percentage = 'Percentuálny Stav Problému';
 $s_access_levels_enum_string = '10:recenzent,25:reportér,40:aktualizátor,55:vývojár,70:vedúci,90:administrátor';
 $s_no_access = 'žiaden prístup';
 $s_project_status_enum_string = '10:vývoj,30:verzia,50:stabilná,70:nepoužívaná';
@@ -482,7 +481,6 @@ $s_last_edited = 'Naposledy upravené:';
 $s_hide_content = 'Skryť obsah';
 $s_show_content = 'Zobraziť obsah';
 $s_file_icon_description = '%1$s ikona súboru';
-$s_unknown_file_extension = 'neznáme';
 $s_webmaster_contact_information = 'Pre pomoc kontaktujte <a href="mailto:%1$s" title="Kontaktujte webmastra mailom.">správcu</a>';
 $s_total_queries_executed = 'Celkový počet vykonaných dopytov: %1$d';
 $s_unique_queries_executed = 'Počet vykonaných unikátnych dopytov: %1$d';
@@ -1432,3 +1430,4 @@ $s_filter_all = 'Všetko';
 $s_filter_new = 'Nové';
 $s_filter_unused_tags = 'Nepoužité';
 $s_filter_unused = 'Nepoužité';
+$s_unknown = 'neznáme';

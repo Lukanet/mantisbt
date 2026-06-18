@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,6 +52,7 @@
  * @author Jeromedl
  * @author Jon Harald Søby
  * @author Kingu
+ * @author Kizule
  * @author Liuxinyu970226
  * @author Lloffiwr
  * @author M42
@@ -258,7 +259,9 @@ $s_workflow = '{{Identical|Workflow}}';
 $s_status_level = '{{Identical|Status}}';
 $s_access_levels = '{{Identical|Access level}}';
 $s_access_change = 'Niveau d’accès minimal pour atteindre cet état';
-$s_limit_access = '{{doc-singularthey}}';
+$s_limit_access = '\'\'Note: "reporter" is singular in this message!\'\'
+
+{{doc-singularthey}}';
 $s_configuration_option_type = '{{Identical|Type}}';
 $s_configuration_option_value = '{{Identical|Value}}';
 $s_all_users = '{{Identical|All users}}';
@@ -400,7 +403,9 @@ $s_filter_resolved = '{{Identical|Resolved}}';
 $s_advanced_filters = '[[File:MantisBT-filter.png|150px|right]]
 Link on bug report filter screen. See screenshot.';
 $s_attachments = '{{Identical|Attachment}}';
-$s_kib = 'IEEE 1541 unit kibibytes (1024 bytes), see https://en.wikipedia.org/wiki/Kibibyte';
+$s_kib = 'IEEE 1541 unit kibibytes (1024 bytes), see https://en.wikipedia.org/wiki/Kibibyte
+
+{{optional}}';
 $s_phpmailer_language = '{{Optional}}';
 $s_sponsorship_process_url = '{{Optional}}';
 $s_changelog = '{{Identical|Change log}}';

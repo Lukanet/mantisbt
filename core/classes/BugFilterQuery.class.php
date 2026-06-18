@@ -140,11 +140,11 @@ class BugFilterQuery extends DbQuery {
 	 *					QUERY_TYPE_IDS, query to return only matched bug ids, which may not
 	 *						be unique, but may be faster and convenient for use as a subquery.
 	 *					QUERY_TYPE_DISTINCT_IDS, query to return unique matched bug ids .
-	 * - 'project_id':	(integer) A project id to be used, if needed by the filer. By default,
+	 * - 'project_id':	(int) A project id to be used, if needed by the filer. By default,
 	 *					current project is used.
-	 * - 'user_id':		(integer) A user id to be used to determine visibility for the filter.
+	 * - 'user_id':		(int) A user id to be used to determine visibility for the filter.
 	 *					By default current user is used.
-	 * - 'use_sticky':	(boolean) Whether to allow returning the bug list sorted so that sticky
+	 * - 'use_sticky':	(bool) Whether to allow returning the bug list sorted so that sticky
 	 *					bugs are placed first in the result order. This is false by default.
 	 *
 	 * @param array $p_filter			Filter array
@@ -176,7 +176,7 @@ class BugFilterQuery extends DbQuery {
 						$this->user_id = (int)$t_value;
 						break;
 					case 'use_sticky':
-						$this->use_sticky = (boolean)$t_value;
+						$this->use_sticky = (bool)$t_value;
 						break;
 				}
 			}
@@ -232,13 +232,14 @@ class BugFilterQuery extends DbQuery {
 	}
 
 	/**
-	 * Override DbQuery execute method to check first if the query is already buils and up to date
-	 * with current query parts.
+	 * Override DbQuery execute method to check first if the query is already
+	 * built and up to date with current query parts.
 	 *
 	 * @param array $p_bind_array	Array for binding values
-	 * @param integer $p_limit		Limit value
-	 * @param integer $p_offset		Offset value
-	 * @return IteratorAggregate|boolean ADOdb result set or false if the query failed.
+	 * @param int   $p_limit		Limit value
+	 * @param int   $p_offset		Offset value
+	 *
+	 * @return ADORecordSet|bool ADOdb result set or false if the query failed.
 	 */
 	public function execute( array $p_bind_array = [], $p_limit = null, $p_offset = null ) {
 		if( $this->needs_rebuild ) {
@@ -253,7 +254,7 @@ class BugFilterQuery extends DbQuery {
 	 * executes it and returns the count value.
 	 * This call does not modify current object.
 	 *
-	 * @return integer	Number of issues matched by the filter
+	 * @return int Number of issues matched by the filter
 	 */
 	public function get_bug_count() {
 		# create a copy from current query
@@ -451,6 +452,9 @@ class BugFilterQuery extends DbQuery {
 					break;
 				case FILTER_PROPERTY_SEVERITY:
 					$this->build_prop_severity();
+					break;
+				case FILTER_PROPERTY_REPRODUCIBILITY:
+					$this->build_prop_reproducibility();
 					break;
 				case FILTER_PROPERTY_RESOLUTION:
 					$this->build_prop_resolution();
@@ -900,6 +904,18 @@ class BugFilterQuery extends DbQuery {
 			return;
 		}
 		$t_query = $this->sql_in( '{bug}.severity', $this->filter[FILTER_PROPERTY_SEVERITY] );
+		$this->add_where( $t_query );
+	}
+
+  /**
+	 * Build the query parts for the filter property "reproducibility"
+	 * @return void
+	 */
+	protected function build_prop_reproducibility() {
+		if( filter_field_is_any( $this->filter[FILTER_PROPERTY_REPRODUCIBILITY] ) ) {
+			return;
+		}
+		$t_query = $this->sql_in( '{bug}.reproducibility', $this->filter[FILTER_PROPERTY_REPRODUCIBILITY] );
 		$this->add_where( $t_query );
 	}
 
@@ -1511,7 +1527,7 @@ class BugFilterQuery extends DbQuery {
 							case CUSTOM_FIELD_TYPE_TEXTAREA:
 								$t_filter_array[] = $t_table_name . '.text = ' . $this->param( '' );
 								break;
-							default;
+							default:
 								$t_filter_array[] = $t_table_name . '.value = ' . $this->param( '' );
 						}
 					} else {
@@ -1637,7 +1653,7 @@ class BugFilterQuery extends DbQuery {
 					if( isset( $t_filter_query['join'] ) ) {
 						$this->add_join( $t_filter_query['join'] );
 					}
-					$t_params = null;
+					$t_params = [];
 					if( isset( $t_filter_query['params'] ) && is_array( $t_filter_query['params'] ) ) {
 						$t_params = $t_filter_query['params'];
 					}

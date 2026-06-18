@@ -27,6 +27,7 @@
  * @uses authentication_api.php
  * @uses config_api.php
  * @uses constant_inc.php
+ * @uses datetimepicker_api.php
  * @uses event_api.php
  * @uses form_api.php
  * @uses gpc_api.php
@@ -42,6 +43,7 @@ require_api( 'access_api.php' );
 require_api( 'authentication_api.php' );
 require_api( 'config_api.php' );
 require_api( 'constant_inc.php' );
+require_api( 'datetimepicker_api.php' );
 require_api( 'event_api.php' );
 require_api( 'form_api.php' );
 require_api( 'gpc_api.php' );
@@ -93,14 +95,12 @@ print_manage_menu( 'manage_proj_ver_edit_page.php' );
 			</tr>
 			<tr>
 				<td class="category">
-					<?php echo lang_get( 'date_order' ) ?>
+					<label for="date_order"><?php echo lang_get( 'date_order' ) ?></label>
 				</td>
 				<td>
-					<input type="text" id="proj-version-date-order" name="date_order" class="datetimepicker input-sm"
-						data-picker-locale="<?php echo lang_get_current_datetime_locale() ?>"
-						data-picker-format="<?php echo config_get( 'datetime_picker_format' ) ?>"
-						size="16" value="<?php echo (date_is_null( $t_version->date_order ) ? '' : string_attribute( date( config_get( 'normal_date_format' ), $t_version->date_order ) ) ) ?>" />
-					<?php print_icon( 'fa-calendar', 'fa-xlg datetimepicker' ); ?>
+					<?php datetimepicker_print( date_is_null( $t_version->date_order )
+							? ''
+							: date( config_get( 'normal_date_format' ), $t_version->date_order ), 'date_order' ) ?>
 				</td>
 			</tr>
 			<tr>
@@ -120,7 +120,7 @@ print_manage_menu( 'manage_proj_ver_edit_page.php' );
 				</td>
 				<td>
 					<label>
-						<input type="checkbox" class="ace" id="proj-version-released" name="released" <?php check_checked( (boolean)$t_version->released, VERSION_RELEASED ); ?> />
+						<input type="checkbox" class="ace" id="proj-version-released" name="released" <?php check_checked( (bool)$t_version->released, VERSION_RELEASED ); ?> />
 						<span class="lbl"></span>
 					</label>
 				</td>
@@ -131,7 +131,7 @@ print_manage_menu( 'manage_proj_ver_edit_page.php' );
 				</td>
 				<td>
 					<label>
-						<input type="checkbox" class="ace" id="proj-version-obsolete" name="obsolete" <?php check_checked( (boolean)$t_version->obsolete, true ); ?> />
+						<input type="checkbox" class="ace" id="proj-version-obsolete" name="obsolete" <?php check_checked( (bool)$t_version->obsolete, true ); ?> />
 						<span class="lbl"></span>
 					</label>
 				</td>

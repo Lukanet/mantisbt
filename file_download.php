@@ -33,13 +33,17 @@
  * @uses gpc_api.php
  * @uses http_api.php
  * @uses utility_api.php
+ *
+ * @noinspection PhpUnhandledExceptionInspection
+ * @noinspection PhpUnused
  */
 
 # Prevent output of HTML in the content if errors occur
-define( 'DISABLE_INLINE_ERROR_REPORTING', true );
+const DISABLE_INLINE_ERROR_REPORTING = true;
 
-$g_bypass_headers = true; # suppress headers as we will send our own later
-define( 'COMPRESSION_DISABLED', true );
+# Suppress headers as we will send our own later
+$g_bypass_headers = true;
+const COMPRESSION_DISABLED = true;
 
 require_once( 'core.php' );
 require_api( 'access_api.php' );
@@ -55,11 +59,11 @@ require_api( 'utility_api.php' );
 
 auth_ensure_user_authenticated();
 
-$f_show_inline = gpc_get_bool( 'show_inline', false );
+$f_show_inline = gpc_get_bool( 'show_inline' );
 
 # To prevent cross-domain inline hotlinking to attachments we require a CSRF
 # token from the user to show any attachment inline within the browser.
-# Without this security in place a malicious user could upload a HTML file
+# Without this security in place a malicious user could upload an HTML file
 # attachment and direct a user to file_download.php?file_id=X&type=bug&show_inline=1
 # and the malicious HTML content would be rendered in the user's browser,
 # violating cross-domain security.
@@ -77,7 +81,7 @@ if( $f_show_inline ) {
 $f_file_id = gpc_get_int( 'file_id' );
 $f_type	= gpc_get_string( 'type' );
 
-$c_file_id = (integer)$f_file_id;
+$c_file_id = (int)$f_file_id;
 
 # we handle the case where the file is attached to a bug
 # or attached to a project as a project doc.
@@ -113,22 +117,20 @@ if( false === $t_row ) {
  */
 extract( $t_row, EXTR_PREFIX_ALL, 'v' );
 
-if( $f_type == 'bug' ) {
-	$t_project_id = bug_get_field( $v_bug_id, 'project_id' );
-} else {
-	$t_project_id = $v_project_id;
-}
-
 # Check access rights
 switch( $f_type ) {
 	case 'bug':
+		$t_project_id = bug_get_field( $v_bug_id, 'project_id' );
+
 		if( !file_can_download_bug_attachments( $v_bug_id, $v_user_id )
-		|| !file_can_download_bugnote_attachments( $v_bugnote_id, $v_user_id )
+		|| !file_can_download_bugnote_attachments( $v_bugnote_id, $v_user_id, $v_bug_id )
 		) {
 			access_denied();
 		}
 		break;
 	case 'doc':
+		$t_project_id = $v_project_id;
+
 		# Check if project documentation feature is enabled.
 		if( OFF == config_get( 'enable_project_documentation' ) ) {
 			access_denied();
@@ -139,6 +141,7 @@ switch( $f_type ) {
 }
 
 # throw away output buffer contents (and disable it) to protect download
+/** @noinspection PhpStatementHasEmptyBodyInspection */
 while( @ob_end_clean() ) {
 }
 
@@ -193,9 +196,11 @@ $t_mime_force_inline = array(
 	'image/jpeg',
 	'image/png',
 	'image/tiff',
+	'image/webp',
 );
 $t_mime_force_attachment = array(
 	'application/x-shockwave-flash',
+	'application/javascript',
 	'image/svg+xml', # SVG could contain CSS or scripting, see #30384
 	'text/html',
 );
@@ -206,9 +211,27 @@ $t_mime_type = $t_mime_type[0];
 
 if( in_array( $t_mime_type, $t_mime_force_inline ) ) {
 	$t_show_inline = true;
-} else if( in_array( $t_mime_type, $t_mime_force_attachment ) ) {
-	$t_show_inline = false;
+
+	# For attachments allowed inline, use the file's actual MIME type as-is
+} else {
+	if( in_array( $t_mime_type, $t_mime_force_attachment ) ) {
+		$t_show_inline = false;
+	}
+
+	# Set Content-Type based on MIME type
+	[$t_type] = explode( '/', $t_mime_type );
+	if( $t_type == 'text' ) {
+		# Ensures we don't interpret HTML, JavaScript, etc.
+		$t_content_type = 'text/plain';
+	} elseif( in_array( $t_type, ['audio', 'video'] ) ) {
+		# No special treatment needed for audio & video
+	} else {
+		# Everything else
+		$t_content_type = 'application/octet-stream';
+	}
 }
+
+form_security_purge( 'file_show_inline' );
 
 http_content_disposition_header( $t_filename, $t_show_inline );
 

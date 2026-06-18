@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -200,7 +200,6 @@ $s_prefix_for_deleted_users = 'bruger';
 $s_administrator = 'administrator';
 $s_myself = 'Mig selv';
 $s_default_access_level = 'Standardadgangsniveau';
-$s_issue_status_percentage = 'Rapport status i procent';
 $s_access_levels_enum_string = '10:observatør,25:rapportør,40:opdatering,55:udvikler,70:leder,90:administrator';
 $s_no_access = 'ingen adgang';
 $s_project_status_enum_string = '10:udvikling,30:udgivelse,50:stabil,70:forældet';
@@ -478,7 +477,6 @@ $s_last_edited = 'Sidst redigeret:';
 $s_hide_content = 'Skjul indhold';
 $s_show_content = 'Vis indhold';
 $s_file_icon_description = '%1$s filikon';
-$s_unknown_file_extension = 'ukendt';
 $s_webmaster_contact_information = 'Kontakt <a href="mailto:%1$s" title="Kontakt administratoren via e-post.">administrator</a> for assistance';
 $s_total_queries_executed = 'Samlet antal udførte forespørgsler: %1$d';
 $s_unique_queries_executed = 'Antal udførte forespørgsler: %1$d';
@@ -1382,3 +1380,4 @@ $s_filter_all = 'Alle';
 $s_filter_new = 'Ny';
 $s_filter_unused_tags = 'Ubrugt';
 $s_filter_unused = 'Ubrugt';
+$s_unknown = 'ukendt';

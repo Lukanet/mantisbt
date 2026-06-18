@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,28 +38,24 @@
  * @ingroup Language
  * @file
  *
+ * @author SZ475
  * @author Saturnian
  */
 
 $s_plugin_MantisGraph_title = 'Grafice Mantis';
 $s_plugin_MantisGraph_description = 'Plugin-ul grafic oficial.';
 $s_plugin_MantisGraph_config = 'Configurație';
-$s_plugin_MantisGraph_tab_label = 'Grafice Mantis';
-$s_plugin_MantisGraph_status_link = 'După stare';
+$s_plugin_MantisGraph_tab_label = 'Grafice';
+$s_plugin_MantisGraph_status_link = 'După statut';
 $s_plugin_MantisGraph_priority_link = 'După prioritate';
-$s_plugin_MantisGraph_severity_link = 'După gravitate';
+$s_plugin_MantisGraph_severity_link = 'După severitate';
 $s_plugin_MantisGraph_category_link = 'După categorie';
-$s_plugin_MantisGraph_resolution_link = 'După rezolvare';
-$s_plugin_MantisGraph_graph_imp_status_title = 'Grafic sinteză după stare';
-$s_plugin_MantisGraph_graph_imp_priority_title = 'Grafic sinteză după prioritate';
-$s_plugin_MantisGraph_graph_imp_severity_title = 'Grafic sinteză după gradul de severitate';
-$s_plugin_MantisGraph_graph_imp_category_title = 'Grafic sinteză după categorie';
-$s_plugin_MantisGraph_graph_imp_resolution_title = 'Grafic sinteză după rezoluție';
-$s_plugin_MantisGraph_by_status_pct = 'după procentul stării';
-$s_plugin_MantisGraph_by_priority_pct = 'după procentul priorității';
-$s_plugin_MantisGraph_by_severity_pct = 'după procentul severității';
-$s_plugin_MantisGraph_by_category_pct = 'după procentul categoriei';
-$s_plugin_MantisGraph_by_resolution_pct = 'după procentul rezoluției';
+$s_plugin_MantisGraph_resolution_link = 'După rezoluție';
+$s_plugin_MantisGraph_graph_imp_status_title = 'După graficele de statut';
+$s_plugin_MantisGraph_graph_imp_priority_title = 'După grafice de prioritate';
+$s_plugin_MantisGraph_graph_imp_severity_title = 'După grafice de severitate';
+$s_plugin_MantisGraph_graph_imp_category_title = 'După grafice de categorii';
+$s_plugin_MantisGraph_graph_imp_resolution_title = 'După grafice de rezoluție';
 $s_plugin_MantisGraph_by_severity_mix = 'după severitate și stare';
 $s_plugin_MantisGraph_by_priority_mix = 'după prioritate și stare';
 $s_plugin_MantisGraph_by_resolution_mix = 'după rezoluție și stare';
@@ -78,3 +74,5 @@ $s_plugin_MantisGraph_period_year_to_date = 'Anual cumulat';
 $s_plugin_MantisGraph_period_select = 'Date arbitrare';
 $s_plugin_MantisGraph_period_last_year = 'Anul trecut';
 $s_plugin_MantisGraph_graph_page = 'Grafic istoria problemelor';
+$s_plugin_MantisGraph_other_categories = 'alte categorii (%d)';
+$s_plugin_MantisGraph_other_projects = 'alte proiecte (%d)';

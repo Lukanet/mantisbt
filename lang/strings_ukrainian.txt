@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,8 +44,10 @@
  * @author Caden99
  * @author Choomaq
  * @author DDPAT
+ * @author Dars
  * @author Dovsienko
  * @author Green Zero
+ * @author Gzhegozh
  * @author Ice bulldog
  * @author Ignatgg
  * @author Igorko
@@ -136,6 +138,7 @@ $s_inherit = 'Успадкувати категорії';
 $s_inherit_global = 'Успадкувати глобальні категорії';
 $s_inherit_parent = 'Успадковувати батьківські категорії';
 $s_update_subproject_inheritance = 'Оновити успадкування підпроєкту';
+$s_category_disabled = 'Категорію було вимкнено, будь ласка, виберіть іншу';
 $s_duplicate_of = 'дублікат проблеми';
 $s_has_duplicate = 'має дублікат';
 $s_related_to = 'пов\'язана з';
@@ -212,7 +215,6 @@ $s_prefix_for_deleted_users = 'користувач';
 $s_administrator = 'Адміністратор';
 $s_myself = 'Мені';
 $s_default_access_level = 'Початкові привілеї доступу';
-$s_issue_status_percentage = 'Співвідношення проблем';
 $s_access_levels_enum_string = '10:Спостерігач,25:Репортер,40:Редактор,55:Розробник,70:Керівник,90:Адміністратор';
 $s_no_access = 'немає доступу';
 $s_project_status_enum_string = '10:розробка,30:реліз,50:стабільний,70:застарілий';
@@ -490,7 +492,6 @@ $s_last_edited = 'Останнє редагування:';
 $s_hide_content = 'Приховати вміст';
 $s_show_content = 'Показати вміст';
 $s_file_icon_description = 'іконка файлу %1$s';
-$s_unknown_file_extension = 'невідомо';
 $s_webmaster_contact_information = 'Зв\'яжіться з <a href="mailto:%1$s" title="Написати веб-майстру по ел. пошті">адміністратором</a> для отримання допомоги';
 $s_total_queries_executed = 'Виконано всього запитів: %1$d';
 $s_unique_queries_executed = 'Виконано унікальних запитів: %1$d';
@@ -661,7 +662,7 @@ $s_plugin = 'Втулка';
 $s_plugins_installed = 'Встановлені модулі';
 $s_plugins_available = 'Доступні плагіни';
 $s_plugins_missing = 'Відсутні або недійсні плагіни';
-$s_plugins_missing_description = 'Плагіни в наведеному нижче списку зареєстровані, але їх вихідний код не вдалося знайти або завантажити з «%s».<br>Спробуйте перевстановити або видалити їх.';
+$s_plugins_missing_description = 'Плагіни в наведеному нижче списку або<ul><li>зареєстровані, але їх вихідний код не вдалося знайти або завантажити з «%s»</li><li>встановлені, але не можуть бути ініціалізовані.</ul>Спробуйте перевстановити або видалити їх.';
 $s_plugin_description = 'Опис';
 $s_plugin_problem_description = 'Опис проблеми';
 $s_plugin_author = 'Автор: %1$s';
@@ -687,7 +688,7 @@ $s_plugin_invalid_status_message = 'Такі необхідні властиво
 $s_plugin_missing_description = 'Відсутній плагін';
 $s_plugin_missing_status_message = 'Плагін встановлено в базі даних Mantis, але завантажити його не вдалося.';
 $s_plugin_missing_class_description = 'Відсутній базовий клас плагіна';
-$s_plugin_missing_class_status_message = 'Був знайдений каталог для цього плагіна, але всередині нього не було відповідного коду плагіна. Переконайтеся, що назва каталогу відповідає базовій назві плагіна (з урахуванням регістру)';
+$s_plugin_missing_class_status_message = 'Був знайдений каталог для цього плагіну, але всередині нього немає  відповідного коду. Переконайтеся, що: назва каталогу відповідає базовій назві плагіну "%1$s" (з урахуванням регістру); у каталозі існує PHP-файл з такою ж назвою, і він визначає клас з назвою "%2$s", що розширює MantisPlugin.';
 $s_project_added_msg = 'Проєкт був успішно створений…';
 $s_category_added_msg = 'Категорія була успішно створена…';
 $s_category_deleted_msg = 'Категорія була успішно видалена…';
@@ -1171,7 +1172,7 @@ $s_tag_update = 'Оновити тег:%1$s';
 $s_tag_update_return = 'Назад до тега';
 $s_tag_update_button = 'Оновити тег';
 $s_tag_delete_button = 'Видалити тег';
-$s_tag_delete_message = 'Ви справді хочете видалити цей тег?';
+$s_tag_delete_message = 'Ви справді хочете видалити тег «%1$s»?';
 $s_tag_existing = 'Наявні теги';
 $s_tag_none_attached = 'Нема прикріплених тегів.';
 $s_tag_attach = 'Вкласти';
@@ -1260,7 +1261,7 @@ $s_timeline_no_activity = 'Жодної активності в межах ді�
 $s_timeline_title = 'Часова шкала';
 $s_timeline_more = 'Більше подій…';
 $s_missing_error_string = 'Відсутній рядок помилки: %1$s';
-$MANTIS_ERROR[ERROR_GENERIC] = 'В процесі виконання виникла помилка.  Повідомте про неї локального адміністратора.';
+$MANTIS_ERROR[ERROR_GENERIC] = 'В процесі виконання цієї дії виникла помилка. Ви можете повідомити про неї локального адміністратора.';
 $MANTIS_ERROR[ERROR_SQL] = 'Виникла помилка SQL.';
 $MANTIS_ERROR[ERROR_REPORT] = 'Десь у вашому звіті є помилка.';
 $MANTIS_ERROR[ERROR_NO_FILE_SPECIFIED] = 'Не вказаний файл';
@@ -1278,18 +1279,18 @@ $MANTIS_ERROR[ERROR_GPC_VAR_NOT_FOUND] = 'Необхідний для цієї �
 $MANTIS_ERROR[ERROR_USER_NAME_NOT_UNIQUE] = 'Такий користувач вже існує. Поверніться назад і введіть інше ім\'я користувача.';
 $MANTIS_ERROR[ERROR_USER_EMAIL_NOT_UNIQUE] = 'Ця електронна пошта вже використовується. Будь ласка, поверніться та виберіть якусь іншу.';
 $MANTIS_ERROR[ERROR_CONFIG_OPT_NOT_FOUND] = 'Не вдалось знайти параметр «%1$s».';
-$MANTIS_ERROR[ERROR_CONFIG_OPT_CANT_BE_SET_IN_DB] = 'Параметр конфігурації «%1$s» неможливо встановити в базі даних. Його потрібно встановити у config_inc.php.';
+$MANTIS_ERROR[ERROR_CONFIG_OPT_CANT_BE_SET_IN_DB] = 'Параметр конфігурації «%1$s» неможливо встановити в базі даних. Його потрібно визначити у config_inc.php.';
 $MANTIS_ERROR[ERROR_CONFIG_OPT_BAD_SYNTAX] = 'Не можу встановити параметр налаштування «%1$s»: %2$s';
 $MANTIS_ERROR[ERROR_LANG_STRING_NOT_FOUND] = 'Не вдалось знайти рядок «%1$s».';
 $MANTIS_ERROR[ERROR_BUGNOTE_NOT_FOUND] = 'Коментар не знайдений.';
 $MANTIS_ERROR[ERROR_DB_FIELD_NOT_FOUND] = 'Не можу знайти поле «%1$s» бази даних.';
 $MANTIS_ERROR[ERROR_HANDLER_ACCESS_TOO_LOW] = 'Обробник проблем не має достатніх привілеїв на обробку проблеми з цим статусом.';
 $MANTIS_ERROR[ERROR_PROJECT_HIERARCHY_DISABLED] = 'Ієрархія проєкту відключена.';
-$MANTIS_ERROR[ERROR_PROJECT_NOT_FOUND] = 'Проект «%1$s» не знайдено.';
-$MANTIS_ERROR[ERROR_PROJECT_NAME_NOT_UNIQUE] = 'Такий проект вже існує. Поверніться назад і введіть іншу назву проєкта.';
+$MANTIS_ERROR[ERROR_PROJECT_NOT_FOUND] = 'Проєкт «%1$s» не знайдено.';
+$MANTIS_ERROR[ERROR_PROJECT_NAME_NOT_UNIQUE] = 'Такий проєкт вже існує. Поверніться назад і введіть іншу назву проєкта.';
 $MANTIS_ERROR[ERROR_PROJECT_NAME_INVALID] = 'Хибна назва проекта. Назва проєкта не може бути порожньою.';
 $MANTIS_ERROR[ERROR_PROJECT_RECURSIVE_HIERARCHY] = 'Ця операція зациклила б ієрархію підпроєктів.';
-$MANTIS_ERROR[ERROR_PROJECT_SUBPROJECT_DUPLICATE] = 'Проект «%1$s» вже є підпроєктом «%2$s».';
+$MANTIS_ERROR[ERROR_PROJECT_SUBPROJECT_DUPLICATE] = 'Проєкт «%1$s» вже є підпроєктом «%2$s».';
 $MANTIS_ERROR[ERROR_PROJECT_SUBPROJECT_NOT_FOUND] = 'Проєкт «%1$s» не є підпроєктом «%2$s».';
 $MANTIS_ERROR[ERROR_USER_BY_NAME_NOT_FOUND] = 'Користувача з ім’ям «%1$s» не знайдено.';
 $MANTIS_ERROR[ERROR_USER_BY_ID_NOT_FOUND] = 'Користувача з ім’ям «%1$d» не знайдено.';
@@ -1319,7 +1320,7 @@ $MANTIS_ERROR[ERROR_BUG_REVISION_NOT_FOUND] = 'Редакцію проблеми
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_NOT_FOUND] = 'Не можу знайти таке власне поле';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_NAME_NOT_UNIQUE] = 'Таке ім\'я вже існує.';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_NAME_INVALID] = 'Недійсна назва користувацького поля «%1$s»: коми не допускаються. Див. розділ «Локалізація користувацьких імен полів» у посібнику адміністратора.';
-$MANTIS_ERROR[ERROR_CUSTOM_FIELD_IN_USE] = 'Принаймні один проект використовує це поле.';
+$MANTIS_ERROR[ERROR_CUSTOM_FIELD_IN_USE] = 'Принаймні один проєкт використовує це поле.';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_INVALID_VALUE] = 'Неприпустиме значення поля «%1$s».';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_INVALID_DEFINITION] = 'Хибне означення власного поля';
 $MANTIS_ERROR[ERROR_CUSTOM_FIELD_INVALID_PROPERTY] = 'Недопустима властивість спеціального поля (%1$s).';
@@ -1338,7 +1339,7 @@ $MANTIS_ERROR[ERROR_CATEGORY_DUPLICATE] = 'Така категорія вже і
 $MANTIS_ERROR[ERROR_NO_COPY_ACTION] = 'Ніяких дій копіювання не задано';
 $MANTIS_ERROR[ERROR_CATEGORY_NOT_FOUND] = 'Не вдалось знайти таку категорію.';
 $MANTIS_ERROR[ERROR_CATEGORY_NOT_FOUND_FOR_PROJECT] = 'Категорію «%1$s» для проєкту «%2$s» не знайдено.';
-$MANTIS_ERROR[ERROR_CATEGORY_CANNOT_UPDATE_DEFAULT] = 'Не можна вилучити цю категорію, бо вона визначається як «Типова категорія для переміщення».';
+$MANTIS_ERROR[ERROR_CATEGORY_CANNOT_UPDATE_DEFAULT] = 'Операція не може бути завершена, оскільки категорія "%1$s" визначена по замовчанню для переміщення глобально або принаймні в одному проєкті.';
 $MANTIS_ERROR[ERROR_CATEGORY_CANNOT_DELETE_HAS_ISSUES] = 'Категорія «%1$s» не може бути видалена, тому що вона пов’язана з однією або декількома проблемами.';
 $MANTIS_ERROR[ERROR_VERSION_DUPLICATE] = 'Така версія вже існує.';
 $MANTIS_ERROR[ERROR_VERSION_NOT_FOUND] = 'Версію «%1$s» не знайдено.';
@@ -1361,7 +1362,7 @@ $MANTIS_ERROR[ERROR_SIGNUP_NOT_MATCHING_CAPTCHA] = 'Хибне підтверд�
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NOT_ENABLED] = 'Функція «забув пароль» не доступна.';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NO_EMAIL_SPECIFIED] = 'Вкажіть email, щоб скинути пароль';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NOT_MATCHING_DATA] = 'Вказана інформація не підходить до жодного активного запису!';
-$MANTIS_ERROR[ERROR_LOST_PASSWORD_CONFIRM_HASH_INVALID] = 'URL підтвердження або хибний, або вже використаний. Зареєструйтесь знову.';
+$MANTIS_ERROR[ERROR_LOST_PASSWORD_CONFIRM_HASH_INVALID] = 'Посилання для підтвердження або хибне, або вже використане.';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_MAX_IN_PROGRESS_ATTEMPTS_REACHED] = 'Досягнуто максимуму паралельних запитів. Зв\'яжіться з системним адміністратором';
 $MANTIS_ERROR[ERROR_USER_CHANGE_LAST_ADMIN] = 'Ви не можете вилучити або знизити в ранзі останній адміністративний обліковий запис. Щоб виконати запитану дію, вам необхідно спочатку створити інший адміністративний обліковий запис.';
 $MANTIS_ERROR[ERROR_PAGE_REDIRECTION] = 'Помилка перенаправлення сторінки, переконайтеся, що за межами блоку PHP (<? Php?>) у config_inc.php або налаштованих файлах custom_*.php немає пробілів.';
@@ -1399,7 +1400,7 @@ $MANTIS_ERROR[ERROR_DEPRECATED_SUPERSEDED] = 'Застаріла функція:
 $MANTIS_ERROR[ERROR_DISPLAY_USER_ERROR_INLINE] = 'Попередження: Система налаштована для відображення вбудованих помилок MantisBT (E_USER_ERROR). Виконання програми буде продовжено. Це може призвести до проблем з цілісністю даних системи.';
 $MANTIS_ERROR[ERROR_TYPE_MISMATCH] = 'Невідповідність типів даних. Увімкніть відображення докладних повідомлень про помилки для отримання додаткової інформації.';
 $MANTIS_ERROR[ERROR_BUG_CONFLICTING_EDIT] = 'Ця проблема була оновлена іншим користувачем, будь ласка, поверніться до цієї проблеми і підтвердіть свою зміну ще раз.';
-$MANTIS_ERROR[ERROR_SPAM_SUSPECTED] = 'Ви досягли дозволеного ліміту активності на %d подій впродовж останніх %d секунд; Вашу дію було заблоковано для уникнення спаму, будь ласка, повторіть спробу пізніше.';
+$MANTIS_ERROR[ERROR_SPAM_SUSPECTED] = 'Ви досягли дозволеного ліміту активності %1$d подій впродовж останніх %2$d секунд; вашу дію було заблоковано для уникнення спаму, будь ласка, повторіть спробу пізніше.';
 $MANTIS_ERROR[ERROR_FIELD_TOO_LONG] = 'Поле «%1$s» має містити не більше %2$d символів.';
 $MANTIS_ERROR[ERROR_API_TOKEN_NAME_NOT_UNIQUE] = 'Назва маркера API «%s» вже використовується. Поверніться назад і введіть іншу назву.';
 $MANTIS_ERROR[ERROR_LOGFILE_NOT_WRITABLE] = 'Файл «%s», вказаний у змінній $g_log_destination, недоступний для запису.';
@@ -1441,3 +1442,4 @@ $s_filter_all = 'ВСІ';
 $s_filter_new = 'Нові';
 $s_filter_unused_tags = 'Невикористані';
 $s_filter_unused = 'Невикористані';
+$s_unknown = 'невідомо';

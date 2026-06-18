@@ -83,28 +83,29 @@ require_api( 'utility_api.php' );
 require_api( 'version_api.php' );
 
 /**
- * Print the headers to cause the page to redirect to $p_url
- * If $p_die is true (default), terminate the execution of the script immediately
- * If we have handled any errors on this page return false and don't redirect.
- * $p_sanitize - true/false - true in the case where the URL is extracted from GET/POST or untrusted source.
- * This would be false if the URL is trusted (e.g. read from config_inc.php).
+ * Print the headers to cause the page to redirect to $p_url and
+ * terminate script execution immediately after the redirect.
  *
- * @param string  $p_url      The page to redirect: has to be a relative path.
- * @param boolean $p_die      If true, stop the script after redirecting.
- * @param boolean $p_sanitize Apply string_sanitize_url to passed URL.
- * @param boolean $p_absolute Indicate if URL is absolute.
- * @return boolean
+ * @param string $p_url      The page to redirect to: has to be a relative path.
+ * @param bool   $p_sanitize Apply string_sanitize_url to passed URL.
+ *                           Should be true when the URL is extracted from an
+ *                           untrusted source (e.g. GET/POST),
+ *                           false if coming from code or configuration
+ *                           (e.g. read from config_inc.php).
+ * @param bool   $p_absolute Indicate if URL is absolute.
+ *
+ * @return void
  */
-function print_header_redirect( $p_url, $p_die = true, $p_sanitize = false, $p_absolute = false ) {
+function print_header_redirect( $p_url, $p_sanitize = false, $p_absolute = false ) {
 	if( error_handled() ) {
 		# Display a basic "proceed" page to show any pending errors, regardless
 		# of $g_stop_on_errors setting which is actually handled in
 		# html_meta_redirect(), called by layout_page_header().
-		layout_page_header( null, $p_url );
+		layout_page_header( '', $p_url );
 		layout_page_begin();
 		html_operation_successful( $p_url );
 		layout_page_end();
-		return false;
+		die;
 	}
 
 	# validate the url as part of this site before continuing
@@ -130,16 +131,9 @@ function print_header_redirect( $p_url, $p_die = true, $p_sanitize = false, $p_a
 		header( 'Location: ' . $t_url );
 	} else {
 		trigger_error( ERROR_PAGE_REDIRECTION, ERROR );
-		return false;
 	}
 
-	if( $p_die ) {
-		die;
-
-		# additional output can cause problems so let's just stop output here
-	}
-
-	return true;
+	die;
 }
 
 /**
@@ -244,6 +238,46 @@ function print_user_with_subject( $p_user_id, $p_bug_id ) {
  */
 function print_email_input( $p_field_name, $p_email ) {
 	echo '<input class="input-sm" id="email-field" type="text" name="' . string_attribute( $p_field_name ) . '" size="32" maxlength="64" value="' . string_attribute( $p_email ) . '" />';
+}
+
+/**
+ * Prints a warning message indicating that the email address is not unique.
+ *
+ * Nothing is printed if the email address is unique.
+ *
+ * @param string $p_email   Email address to check
+ * @param int    $p_user_id User Id
+ *
+ * @return void
+ */
+function print_email_not_unique_warning( string $p_email, int $p_user_id ): void {
+	if( config_get_global( 'email_ensure_unique' )
+		&& !user_is_email_unique( $p_email, $p_user_id )
+	) {
+		echo '<div class="padding-8">';
+		print_icon( 'fa-exclamation-triangle', 'ace-icon bigger-125 red  padding-right-4' );
+		echo lang_get( 'email_not_unique' );
+		echo '</div>';
+	}
+}
+
+/**
+ * Prints a warning message if the user's email address is pending validation.
+ *
+ * @param int $p_user_id User Id
+ *
+ * @return void
+ */
+function print_email_pending_verification_warning( int $p_user_id ): void {
+	# Get pending email address from token
+	$t_email_change = token_get_value( TOKEN_ACCOUNT_CHANGE_EMAIL, $p_user_id );
+
+	if( $t_email_change ) {
+		echo '<div class="padding-8">';
+		print_icon('fa-info-circle', 'ace-icon bigger-125 blue padding-right-4' );
+		printf( lang_get( 'verify_email_pending' ), $t_email_change );
+		echo '</div>';
+	}
 }
 
 /**
@@ -788,17 +822,15 @@ function print_category_option_list( $p_category_id = 0, $p_project_id = null, $
 		echo category_full_name( 0, false );
 		echo '</option>', PHP_EOL;
 	} else {
-		if( 0 == $p_category_id ) {
-			if( count( $t_cat_arr ) == 1 ) {
-				$p_category_id = (int) $t_cat_arr[0]['id'];
-			} else {
-				echo '<option value="" disabled hidden';
-				check_selected( $p_category_id, 0 );
-				echo '>';
-				echo string_attribute( lang_get( 'select_option' ) );
-				echo '</option>', PHP_EOL;
-			}
+		if( 0 == $p_category_id && count( $t_cat_arr ) == 1 ) {
+			# Single option are selected by default
+			$p_category_id = (int) $t_cat_arr[0]['id'];
 		}
+		echo '<option value="" disabled hidden';
+		check_selected( $p_category_id, 0 );
+		echo '>';
+		echo string_attribute( lang_get( 'select_option' ) );
+		echo '</option>', PHP_EOL;
 	}
 
 	foreach( $t_cat_arr as $t_category_row ) {
@@ -925,7 +957,7 @@ function print_version_option_list( $p_version = '', $p_project_ids = null, $p_r
 	}
 
 	if( $p_leading_blank ) {
-		echo '<option value=""></option>';
+		echo '<option value="">&nbsp;</option>';
 	}
 
 	$t_listed = array();
@@ -1154,14 +1186,16 @@ function print_language_option_list( $p_language ) {
  * @return void
  */
 function print_font_option_list( $p_font ) {
-	if ( config_get_global( 'cdn_enabled' ) == ON ) {
-		$t_arr = config_get( 'font_family_choices' );
-	} else {
-		$t_arr = config_get( 'font_family_choices_local' );
+	$t_font_list = helper_get_font_list();
+
+	# Append given font to the list if it is not part of it
+	if( !in_array( $p_font, $t_font_list ) ) {
+		$t_font_list[] = $p_font;
+		$p_font = string_html_specialchars( $p_font );
 	}
-	$t_enum_count = count( $t_arr );
-	for( $i = 0;$i < $t_enum_count;$i++ ) {
-		$t_font = string_attribute( $t_arr[$i] );
+
+	foreach( $t_font_list as $t_key => $t_font ) {
+		$t_font = string_html_specialchars( $t_font );
 		echo '<option value="' . $t_font . '"';
 		check_selected( $t_font, $p_font );
 		echo '>' . $t_font . '</option>';
@@ -1229,14 +1263,14 @@ function print_project_user_list_option_list2( $p_user_id ) {
  * @return void
  */
 function print_custom_field_projects_list( $p_field_id ) {
-	$c_field_id = (integer)$p_field_id;
+	$c_field_id = (int)$p_field_id;
 	$t_project_ids = custom_field_get_project_ids( $p_field_id );
 
 	$t_security_token = form_security_param( 'manage_proj_custom_field_remove' );
 
 	foreach( $t_project_ids as $t_project_id ) {
 		$t_project_name = project_get_field( $t_project_id, 'name' );
-		echo '<strong>', string_display_line( $t_project_name ), '</strong>: ';
+		echo '<strong>', string_attribute( $t_project_name ), '</strong>: ';
 		print_extra_small_button( 'manage_proj_custom_field_remove.php?field_id=' . $c_field_id . '&project_id=' . $t_project_id . '&return=custom_field' . $t_security_token, lang_get( 'remove_link' ) );
 		echo '<br />- ';
 
@@ -1254,7 +1288,7 @@ function print_custom_field_projects_list( $p_field_id ) {
 				echo '<em>';
 			}
 
-			echo string_display_line( custom_field_get_field( $t_current_field_id, 'name' ) );
+			echo string_attribute( custom_field_get_field( $t_current_field_id, 'name' ) );
 			echo ' (', custom_field_get_sequence( $t_current_field_id, $t_project_id ), ')';
 
 			if( $t_current_field_id == $p_field_id ) {
@@ -1307,9 +1341,9 @@ function print_formatted_priority_string( BugData $p_bug ) {
 	if( $t_priority_threshold >= 0 &&
 		$p_bug->priority >= $t_priority_threshold &&
 		$p_bug->status < config_get( 'bug_closed_status_threshold' ) ) {
-		echo '<span class="bold">' . $t_pri_str . '</span>';
+		echo '<span class="bold">' . string_attribute( $t_pri_str ) . '</span>';
 	} else {
-		echo $t_pri_str;
+		echo string_attribute( $t_pri_str );
 	}
 }
 
@@ -1326,9 +1360,9 @@ function print_formatted_severity_string( BugData $p_bug ) {
 	if( $t_severity_threshold >= 0 &&
 		$p_bug->severity >= $t_severity_threshold &&
 		$p_bug->status < config_get( 'bug_closed_status_threshold' ) ) {
-		echo '<span class="bold">' . $t_sev_str . '</span>';
+		echo '<span class="bold">' . string_attribute( $t_sev_str ) . '</span>';
 	} else {
-		echo $t_sev_str;
+		echo string_attribute( $t_sev_str);
 	}
 }
 
@@ -1370,14 +1404,18 @@ function print_view_bug_sort_link( $p_label, $p_sort_field, $p_sort, $p_dir, $p_
 				# Otherwise always start with ascending
 				$p_dir = 'ASC';
 			}
-			$t_sort_field = rawurlencode( $p_sort_field );
-			$t_print_parameter = ( $p_columns_target == COLUMNS_TARGET_PRINT_PAGE ) ? '&print=1' : '';
-			$t_filter_parameter = filter_is_temporary( $g_filter ) ? filter_get_temporary_key_param( $g_filter ) . '&' : '';
-			$t_url = 'view_all_set.php?' . $t_filter_parameter
-				. 'sort_add=' . $t_sort_field
-				. '&dir_add=' . $p_dir
-				. '&type=' . FILTER_ACTION_PARSE_ADD
-				. $t_print_parameter;
+			$t_params = [
+				'sort_add' => $p_sort_field,
+				'dir_add' => $p_dir,
+				'type' => FILTER_ACTION_PARSE_ADD
+			];
+			if( $p_columns_target == COLUMNS_TARGET_PRINT_PAGE ) {
+				$t_params['print'] = 1;
+			}
+			$t_url = helper_url_combine( 'view_all_set.php', $t_params );
+			if( filter_is_temporary( $g_filter ) ) {
+				$t_url .= '&' . filter_get_temporary_key_param( $g_filter );
+			}
 			print_link( $t_url, $p_label, false, '', $p_icon );
 			break;
 		default:
@@ -1412,10 +1450,16 @@ function print_manage_user_sort_link( $p_page, $p_string, $p_field, $p_dir, $p_s
 		$t_dir = 'ASC';
 	}
 
-	$t_field = rawurlencode( $p_field );
 	print_link(
-		$p_page . '?sort=' . $t_field . '&dir=' . $t_dir . '&save=1&hideinactive=' . $p_hide_inactive
-		. '&showdisabled=' . $p_show_disabled . '&filter=' . $p_filter . '&search=' . $p_search,
+		helper_url_combine( $p_page, [
+			'sort' => $p_field,
+			'dir' => $t_dir,
+			'save' => '1',
+			'hideinactive' => $p_hide_inactive,
+			'showdisabled' => $p_show_disabled,
+			'filter' => $p_filter,
+			'search' => $p_search
+		] ),
 		$p_string,
 		false,
 		$p_class
@@ -1444,8 +1488,13 @@ function print_manage_project_sort_link( $p_page, $p_string, $p_field, $p_dir, $
 		$t_dir = 'ASC';
 	}
 
-	$t_field = rawurlencode( $p_field );
-	print_link( $p_page . '?sort=' . $t_field . '&dir=' . $t_dir, $p_string );
+	print_link(
+		helper_url_combine( $p_page, [
+			'sort' => $p_field,
+			'dir' => $t_dir
+		] ),
+		$p_string
+	);
 }
 
 /**
@@ -2021,7 +2070,7 @@ function print_bug_attachment_header( array $p_attachment, $p_security_token ) {
 		if( $p_attachment['can_download'] ) {
 			echo '<a href="' . string_attribute( $p_attachment['download_url'] ) . '"' . print_attachment_link_target() . '>';
 		}
-		echo string_display_line( $p_attachment['display_name'] );
+		echo string_attribute( $p_attachment['display_name'] );
 		if( $p_attachment['can_download'] ) {
 			echo '</a>';
 		}
@@ -2030,7 +2079,7 @@ function print_bug_attachment_header( array $p_attachment, $p_security_token ) {
 		event_signal( 'EVENT_VIEW_BUG_ATTACHMENT', array( $p_attachment ) );
 	} else {
 		print_file_icon( $p_attachment['display_name'] );
-		echo lang_get( 'word_separator' ) . '<s>' . string_display_line( $p_attachment['display_name'] ) . '</s>' . lang_get( 'word_separator' ) . '(' . lang_get( 'attachment_missing' ) . ')';
+		echo lang_get( 'word_separator' ) . '<s>' . string_attribute( $p_attachment['display_name'] ) . '</s>' . lang_get( 'word_separator' ) . '(' . lang_get( 'attachment_missing' ) . ')';
 	}
 
 	if( $p_attachment['can_delete'] ) {
@@ -2193,58 +2242,24 @@ function print_max_filesize( $p_size, $p_divider = 1024, $p_unit = 'kib' ) {
 /**
  * Populate form element with dropzone data attributes
  * @return void
+ * @deprecated 2.29.0 dropzone_print_form_data() should be used in preference to this function
  */
 function print_dropzone_form_data() {
-	//$t_max_file_size = ceil( file_get_max_file_size() / ( 1024*1024 ) );
-	echo 'data-force-fallback="' . ( config_get( 'dropzone_enabled' ) ? 'false' : 'true' ) . '"' . "\n";
-	echo "\t" . 'data-max-filesize-bytes="'. file_get_max_file_size() . '"' . "\n";
-	echo "\t" . 'data-max-filename-length="'. DB_FIELD_SIZE_FILENAME . '"' . "\n";
-	$t_allowed_files = config_get( 'allowed_files' );
-	if ( !empty ( $t_allowed_files ) ) {
-		$t_allowed_files = '.' . implode ( ',.', explode ( ',', $t_allowed_files ) );
-	}
-	echo "\t" . 'data-accepted-files="' . $t_allowed_files . '"' . "\n";
-	echo "\t" . 'data-default-message="' . htmlspecialchars( lang_get( 'dropzone_default_message' ) ) . '"' . "\n";
-	echo "\t" . 'data-fallback-message="' . htmlspecialchars( lang_get( 'dropzone_fallback_message' ) ) . '"' . "\n";
-	echo "\t" . 'data-fallback-text="' . htmlspecialchars( lang_get( 'dropzone_fallback_text' ) ) . '"' . "\n";
-	echo "\t" . 'data-file-too-big="' . htmlspecialchars( lang_get( 'dropzone_file_too_big' ) ) . '"' . "\n";
-	echo "\t" . 'data-invalid-file-type="' . htmlspecialchars( lang_get( 'dropzone_invalid_file_type' ) ) . '"' . "\n";
-	echo "\t" . 'data-response-error="' . htmlspecialchars( lang_get( 'dropzone_response_error' ) ) . '"' . "\n";
-	echo "\t" . 'data-cancel-upload="' . htmlspecialchars( lang_get( 'dropzone_cancel_upload' ) ) . '"' . "\n";
-	echo "\t" . 'data-cancel-upload-confirmation="' . htmlspecialchars( lang_get( 'dropzone_cancel_upload_confirmation' ) ) . '"' . "\n";
-	echo "\t" . 'data-remove-file=""' . "\n";
-	echo "\t" . 'data-remove-file-confirmation="' . htmlspecialchars( lang_get( 'dropzone_remove_file_confirmation' ) ) . '"' . "\n";
-	echo "\t" . 'data-max-files-exceeded="' . htmlspecialchars( lang_get( 'dropzone_max_files_exceeded' ) ) . '"' . "\n";
-	echo "\t" . 'data-dropzone-not-supported="' . htmlspecialchars( lang_get( 'dropzone_not_supported' ) ) . '"';
-	echo "\t" . 'data-dropzone_multiple_files_too_big="' . htmlspecialchars( lang_get( 'dropzone_multiple_files_too_big' ) ) . '"';
-	echo "\t" . 'data-dropzone_multiple_filenames_too_long="' . htmlspecialchars( lang_get( 'dropzone_multiple_filenames_too_long' ) ) . '"';
+	error_parameters( __FUNCTION__, 'dropzone_print_form_data' );
+	trigger_error( ERROR_DEPRECATED_SUPERSEDED, DEPRECATED );
+	dropzone_print_form_data();
 }
 
 /**
  * Populate a hidden div where its inner html will be used as preview template
  * for dropzone attached files
  * @return void
+ * @deprecated 2.29.0 dropzone_print_template() should be used in preference to this function
  */
 function print_dropzone_template(){
-	?>
-	<div id="dropzone-preview-template" class="hidden">
-		<div class="dz-preview dz-file-preview">
-			<div class="dz-filename"><span data-dz-name></span></div>
-			<img data-dz-thumbnail />
-			<div class="dz-error-message">
-				<div class="dz-error-mark"><span><?php print_icon('fa-times-circle'); ?></span></div>
-				<span data-dz-errormessage></span>
-			</div>
-			<div class="dz-size" data-dz-size></div>
-			<div class="progress progress-small progress-striped active">
-				<div class="progress-bar progress-bar-success" data-dz-uploadprogress></div>
-			</div>
-			<a class="btn btn-primary btn-white btn-round btn-xs" data-dz-remove>
-				<?php echo lang_get( 'dropzone_remove_file' ); ?>
-			</a>
-		</div>
-	</div>
-	<?php
+	error_parameters( __FUNCTION__, 'dropzone_print_template' );
+	trigger_error( ERROR_DEPRECATED_SUPERSEDED, DEPRECATED );
+	dropzone_print_template();
 }
 
 /**
@@ -2315,3 +2330,14 @@ function print_relationship_list_box( $p_default_rel_type = BUG_REL_ANY, $p_sele
 <?php
 }
 
+/**
+ * Print table spacer.
+ *
+ * @param integer $p_cols Number of columns in the table
+ * @return void
+ */
+function print_table_spacer( int $p_cols ) {
+	if( $p_cols > 0 ) {
+		echo '<tr class="spacer"><td colspan="', $p_cols, '"></td></tr>';
+	}
+}

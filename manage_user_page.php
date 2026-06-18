@@ -35,6 +35,7 @@
  * @uses lang_api.php
  * @uses print_api.php
  * @uses string_api.php
+ * @uses tokens_api.php
  * @uses utility_api.php
  */
 
@@ -51,6 +52,7 @@ require_api( 'icon_api.php' );
 require_api( 'lang_api.php' );
 require_api( 'print_api.php' );
 require_api( 'string_api.php' );
+require_api( 'tokens_api.php' );
 require_api( 'utility_api.php' );
 
 auth_reauthenticate();
@@ -58,7 +60,8 @@ auth_reauthenticate();
 access_ensure_global_level( config_get( 'manage_user_threshold' ) );
 
 $t_cookie_name = config_get( 'manage_users_cookie' );
-$t_lock_image = icon_get( 'fa-lock', 'fa-lg', lang_get( 'protected' ) );
+$t_protected_image = icon_get( 'fa-shield', 'fa-lg', lang_get( 'protected' ) );
+$t_lock_image = icon_get( 'fa-lock', 'fa-lg', lang_get( 'locked' ) );
 
 $f_save = gpc_get_bool( 'save' );
 $f_filter = gpc_get_string( 'filter', 'ALL' );
@@ -134,19 +137,17 @@ $t_unused_user_count = $t_row['unused_user_count'];
 
 # Manage Form BEGIN
 
-$t_prefix_array = array();
+$t_prefix_array = array_merge( range('A', 'Z'), range('0', '9') );
+$t_prefix_array = array_combine( $t_prefix_array, $t_prefix_array );
+$t_prefix_array = array_merge (
+		[ 'ALL' => lang_get( 'filter_all' ) ],
+		$t_prefix_array,
+		[
+			'UNUSED' => lang_get( 'filter_unused' ),
+			'NEW' => lang_get( 'filter_new' ),
+		]
+	);
 
-$t_prefix_array['ALL'] = lang_get( 'filter_all' );
-
-for( $i = 'A'; $i != 'AA'; $i++ ) {
-	$t_prefix_array[$i] = $i;
-}
-
-for( $i = 0; $i <= 9; $i++ ) {
-	$t_prefix_array[(string)$i] = (string)$i;
-}
-$t_prefix_array['UNUSED'] = lang_get( 'filter_unused' );
-$t_prefix_array['NEW'] = lang_get( 'filter_new' );
 ?>
 
 <div class="col-md-12 col-xs-12">
@@ -354,14 +355,16 @@ $t_user_count = count( $t_users );
 		<thead>
 			<tr>
 <?php
+	$t_max_failed = config_get( 'max_failed_login_count' );
+
 	# Print column headers with sort links
 	$t_columns = array(
 		'username', 'realname', 'email', 'access_level',
 		'enabled', 'protected', 'date_created', 'last_visit'
 	);
-	$t_display_failed_login_count = OFF != config_get( 'max_failed_login_count' );
-	if( $t_display_failed_login_count ) {
-		$t_columns[] = 'failed_login_count';
+	if( OFF != $t_max_failed ) {
+		# Insert failed_login_count column after "protected"
+		array_splice( $t_columns, 6, 0, ['failed_login_count'] );
 	}
 	foreach( $t_columns as $t_col ) {
 		echo "\t<th>";
@@ -382,6 +385,14 @@ $t_user_count = count( $t_users );
 	$t_duplicate_emails =  config_get_global( 'email_ensure_unique' )
 		? user_get_duplicate_emails()
 		: [];
+
+	# User accounts with an email verification pending (user_id => new email)
+	$t_emails_pending_verification = token_get_by_type( TOKEN_ACCOUNT_CHANGE_EMAIL);
+	$t_emails_pending_verification = array_combine(
+			array_column( $t_emails_pending_verification, 'owner' ),
+			array_column( $t_emails_pending_verification, 'value' )
+		);
+
 	$t_access_level = array();
 	foreach( $t_users as $t_user ) {
 		/**
@@ -394,6 +405,7 @@ $t_user_count = count( $t_users );
 		 * @var int $v_access_level
 		 * @var bool $v_enabled
 		 * @var bool $v_protected
+		 * @var int $v_failed_login_count
 		 */
 		extract( $t_user, EXTR_PREFIX_ALL, 'v' );
 
@@ -410,14 +422,14 @@ $t_user_count = count( $t_users );
 			/** @noinspection HtmlUnknownTarget */
 			printf( '<a href="%s">%s</a>',
 				'manage_user_edit_page.php?user_id=' . $v_id,
-				string_display_line( $v_username )
+				string_attribute( $v_username )
 			);
 		} else {
-			echo string_display_line( $v_username );
+			echo string_attribute( $v_username );
 		}
 ?>
 				</td>
-				<td><?php echo string_display_line( $v_realname ) ?></td>
+				<td><?php echo string_attribute( $v_realname ) ?></td>
 				<td><?php
 					# Display warning icon if emails should be unique and a duplicate exists
 					if( array_key_exists( strtolower( $v_email ), $t_duplicate_emails ) ) {
@@ -426,23 +438,40 @@ $t_user_count = count( $t_users );
 							lang_get( 'email_not_unique' )
 						);
 					}
+
+					# Display warning icon if email is pending verification
+					if( isset( $t_emails_pending_verification[$v_id] ) ) {
+						$t_msg = sprintf( lang_get( 'verify_email_pending' ), $t_emails_pending_verification[$v_id] );
+						print_icon( 'fa-info-circle',
+							'ace-icon bigger-125 blue padding-right-4',
+							string_html_specialchars( $t_msg )
+						);
+					}
 					print_email_link( $v_email, $v_email )
 				?></td>
 				<td><?php echo $t_access_level[$v_access_level] ?></td>
 				<td class="center"><?php echo trans_bool( $v_enabled ) ?></td>
 				<td class="center"><?php
 					if( $v_protected ) {
-						echo ' ' . $t_lock_image;
+						echo ' ' . $t_protected_image;
 					} else {
 						echo '&#160;';
 					} ?>
 				</td>
+<?php
+					if( OFF != $t_max_failed ) {
+						echo '<td>' . $v_failed_login_count;
+						if( $v_failed_login_count >= $t_max_failed ) {
+							echo '&nbsp;&nbsp;' . $t_lock_image;
+						}
+						echo '</td>';
+					}
+?>
 				<td><?php echo $v_date_created ?></td>
-				<td><?php echo $v_last_visit ?></td><?php if( $t_display_failed_login_count ) { ?>
-				<td><?php echo $v_failed_login_count ?></td><?php } ?>
+				<td><?php echo $v_last_visit ?></td>
 			</tr>
 <?php
-	}  # end for
+	}  # end foreach
 ?>
 		</tbody>
 	</table>

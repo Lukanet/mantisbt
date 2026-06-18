@@ -242,6 +242,7 @@ a:link:after, a:visited:after {
 
 .user-info {
     line-height: 33px !important;
+    max-width: 270px !important;
 }
 
 .page-content {
@@ -388,6 +389,11 @@ i.datetimepicker {
 
 .bootstrap-datetimepicker-widget.dropdown-menu {
     color: #333333;
+}
+
+/* Allow datetimepicker to overflow table-responsive containers */
+.table-responsive:has(.datetimepicker) {
+    overflow: visible;
 }
 
 .dropdown-menu .divider {
@@ -755,4 +761,17 @@ ul.changelog > li, ul.roadmap > li {
         right: 43px !important;
     }
 
+}
+/* Disable padding for the top included page */
+.navbar-container {
+    padding-left: 0;
+    padding-right: 0;
+}
+/* Move the button higher than the bottom included page */
+.btn-scroll-up {
+    z-index: 1099;
+}
+/* Fix the background of the navbar */
+.skin-3 .navbar.navbar-collapse {
+	background-color: #404040;
 }

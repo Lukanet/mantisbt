@@ -189,12 +189,12 @@ print_manage_menu( 'manage_proj_page.php' );
 				<td>
 					<a href="manage_proj_edit_page.php?project_id=<?php echo $t_project['id'] ?>">
 						<?php echo str_repeat( "&raquo; ", $t_level )
-							. string_display_line( $t_project['name'] ) ?>
+							. string_attribute( $t_project['name'] ) ?>
 					</a>
 				</td>
-				<td><?php echo get_enum_element( 'project_status', $t_project['status'] ) ?></td>
+				<td><?php echo string_attribute( get_enum_element( 'project_status', $t_project['status'] ) ) ?></td>
 				<td class="center"><?php echo trans_bool( $t_project['enabled'] ) ?></td>
-				<td><?php echo get_enum_element( 'project_view_state', $t_project['view_state'] ) ?></td>
+				<td><?php echo string_attribute( get_enum_element( 'project_view_state', $t_project['view_state'] ) ) ?></td>
 				<td><?php echo string_display_links( $t_project['description'] ) ?></td>
 			</tr><?php
 			}
@@ -251,37 +251,39 @@ print_manage_menu( 'manage_proj_page.php' );
 				<?php } ?>
 			</tr>
 		</thead>
-
 		<tbody>
 <?php
 			foreach( $t_categories as $t_category ) {
 				$t_id = $t_category['id'];
 ?>
 			<tr>
-				<td><?php echo string_display_line( category_full_name( $t_id, false ) )  ?></td>
+				<td><?php echo string_attribute( category_full_name( $t_id, false ) )  ?></td>
 				<td class="center"><?php echo trans_bool( $t_category['status'] ) ?></td>
 				<td><?php echo prepare_user_name( $t_category['user_id'] ) ?></td>
 				<?php if( $t_can_update_global_cat ) { ?>
 				<td class="center">
-<?php
-					$t_id = urlencode( $t_id );
-					$t_project_id = urlencode( ALL_PROJECTS );
-					echo '<div class="btn-group inline">';
-					echo '<div class="pull-left">';
-					print_form_button(
-						"manage_proj_cat_edit_page.php?category_id=$t_id&project_id=$t_project_id",
-						lang_get( 'edit' )
-					);
-					echo '</div>';
-					echo '<div class="pull-left">';
-					print_form_button(
-						"manage_proj_cat_delete.php?category_id=$t_id&project_id=$t_project_id",
-						lang_get( 'delete' )
-					);
-					echo '</div>';
-?>
+					<div class="btn-group inline">
+						<div class="pull-left"><?php
+						print_form_button(
+							helper_url_combine( 'manage_proj_cat_edit_page.php', [
+								'category_id' => $t_id,
+								'project_id' => ALL_PROJECTS
+							] ),
+							lang_get( 'edit' )
+						); ?>
+						</div>
+						<div class="pull-left"><?php
+						print_form_button(
+							helper_url_combine( 'manage_proj_cat_delete.php', [
+								'category_id' => $t_id,
+								'project_id' => ALL_PROJECTS
+							] ),
+							lang_get( 'delete' )
+						); ?>
+						</div>
+					</div>
 				</td>
-			<?php } ?>
+				<?php } ?>
 			</tr>
 <?php
 			} # end for loop

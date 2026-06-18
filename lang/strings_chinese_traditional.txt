@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,6 +48,7 @@
  * @author LNDDYL
  * @author Lionpancake
  * @author Liuxinyu970226
+ * @author LowensteinYang
  * @author Macofe
  * @author Mark85296341
  * @author Oapbtommy
@@ -214,7 +215,6 @@ $s_prefix_for_deleted_users = '使用者';
 $s_administrator = '系統管理員';
 $s_myself = '自己';
 $s_default_access_level = '預設存取階層';
-$s_issue_status_percentage = '問題狀態百分比';
 $s_access_levels_enum_string = '10:檢視者,25:回報人,40:更新者,55:開發者,70:專案管理者,90:系統管理者';
 $s_no_access = '無法存取';
 $s_project_status_enum_string = '10:開發中,30:已發佈,50:穩定,70:停止維護';
@@ -242,6 +242,9 @@ $s_reset_request_msg = '不明人士 (可能是你自己) 提出更改密碼的�
 若這個請求確定是您提出的，請進入下列的網址來更改您的密碼：';
 $s_reset_request_admin_msg = '您的密碼已被重新設定。請訪問以下 URL 來設定新密碼：';
 $s_reset_request_in_progress_msg = '若您提供的帳號及電子郵件信箱正確，系統將會自動寄發一封確認信到你的電子郵件信箱。當你收到這封確認信，請依照信中的指示的步驟更改您的密碼。';
+$s_verify_email_msg = '有人（很可能是您）修改了下方所提及到與帳號關聯的電子郵件地址。舊的電子郵件地址，會在您確認此變動內容之前繼續有效。
+
+若要驗證新電子郵件地址，請參訪以下網址：';
 $s_email_notification_title_for_status_bug_new = '下列問題現在被重設為 [新問題] 狀態。';
 $s_email_notification_title_for_status_bug_feedback = '下列問題需要您的 [回覆]。';
 $s_email_notification_title_for_status_bug_acknowledged = '下列問題已經被 [接受]。';
@@ -492,13 +495,14 @@ $s_last_edited = '最近編輯於：$1';
 $s_hide_content = '隱藏內容';
 $s_show_content = '顯示內容';
 $s_file_icon_description = '%1$s檔案圖標';
-$s_unknown_file_extension = '未知';
 $s_webmaster_contact_information = '請聯絡 <a href="mailto:%1$s" title="透過電子郵件聯絡網站管理員">管理人員</a> 提供協助。';
 $s_total_queries_executed = '已執行查詢總計：%1$d';
 $s_unique_queries_executed = '已執行特殊查詢次數：%1$d';
 $s_total_query_execution_time = '查詢執行時間總計：%1$s 秒';
 $s_page_execution_time = '頁面執行時間：%1$s 秒';
 $s_memory_usage = '記憶體使用量：%1$s KiB';
+$s_debug_log = '偵錯日誌';
+$s_debug_log_empty = '日誌為空。';
 $s_log_page_number = '編號';
 $s_log_page_time = '執行時間';
 $s_log_page_caller = '呼叫者';
@@ -529,6 +533,10 @@ $s_lost_password_done_title = '重設密碼訊息已經送出';
 $s_lost_password_subject = '重新設定密碼';
 $s_lost_password_info = '您必須填寫您所使用的帳號及電子郵件信箱以便重新設定您的密碼。<br />若您提供的資訊正確，將會於上表單中所填寫的電子郵件信箱中收到您的帳號驗証碼，請根據信件中所提供的連結完成您的密碼變更。';
 $s_lost_password_confirm_hash_OK = '系統已接受您的確認，請更新你的密碼。';
+$s_verify_email_title = '驗證電子郵件地址';
+$s_verify_email_pending = '新電子郵件地址「%1$s」正在等待驗證。';
+$s_verify_email_warning = '您的新電子郵件地址「%1$s」已通過驗證。';
+$s_verify_email_confirm_msg = '為驗證電子郵件地址的更改，已向「%1$s」發送確認郵件。在新的電郵地址通過驗證之前，舊電郵地址會繼續有效。';
 $s_open_and_assigned_to_me_label = '尚未處理且分配給我的問題：';
 $s_open_and_reported_to_me_label = '尚未處理且由我回報的問題：';
 $s_newer_news_link = '較新的最新消息';
@@ -583,6 +591,7 @@ $s_date_created = '建立日期';
 $s_last_visit = '上次瀏覽';
 $s_last_visit_label = '上次瀏覽：';
 $s_failed_login_count = '登入失敗';
+$s_locked = '帳號已鎖定';
 $s_edit_user_link = '編輯使用者';
 $s_search_user_hint = '使用者名稱、真實名稱、或電子郵件';
 $s_separate_list_items_by = '(使用 "%1$s" 分隔清單項目)';
@@ -764,6 +773,7 @@ $s_prune_accounts_button = '清除';
 $s_confirm_account_pruning = '你確定你要刪除尚未登入過的帳號嗎？';
 $s_edit_user_title = '編輯使用者';
 $s_account_unlock_button = '取消封鎖帳號';
+$s_clear_failed_logins = '清除失敗的登入紀錄';
 $s_reset_password_button = '重設密碼';
 $s_delete_user_button = '刪除使用者';
 $s_impersonate_user_button = '扮演使用者';
@@ -774,6 +784,7 @@ $s_account_reset_msg = '確認訊息已寄送至選擇使用者的電子郵件�
 使用此功能，使用者將可以更改自己的密碼。';
 $s_account_reset_msg2 = '此帳號的密碼已設為空白...';
 $s_account_unlock_msg = '帳號已經取消鎖定。';
+$s_clear_failed_logins_msg = '以重設登入失敗的次數。';
 $s_manage_user_updated_msg = '已成功更新帳號...';
 $s_email_user_updated_subject = '帳號已更新';
 $s_email_user_updated_msg = '管理者已更新您的帳號資訊，更改的項目如下，您可以使用此網址隨時自行修改您的帳號資訊:';
@@ -863,6 +874,7 @@ $s_assign_to = '分配給';
 $s_additional_information = '其他資訊';
 $s_submit_report_button = '送出問題';
 $s_check_report_more_bugs = '尚有其他問題需要回報';
+$s_submitted_for_moderation = '您的操作已提交審核，核准後即可呈現。';
 $s_report_stay = '繼續回報';
 $s_selected_project = '已選擇專案';
 $s_valid_project_msg = '你必須選擇一個有效的專案';
@@ -1288,7 +1300,7 @@ $MANTIS_ERROR[ERROR_GPC_VAR_NOT_FOUND] = '缺少頁面 (%1$s) 所須的必要的
 $MANTIS_ERROR[ERROR_USER_NAME_NOT_UNIQUE] = '此使用者帳號已經存在。 請返回上一頁選擇其他的帳號名稱。';
 $MANTIS_ERROR[ERROR_USER_EMAIL_NOT_UNIQUE] = '此電子郵件信箱已被使用，請返回上頁重新選擇。';
 $MANTIS_ERROR[ERROR_CONFIG_OPT_NOT_FOUND] = '查無設置選項 "%1$s"。';
-$MANTIS_ERROR[ERROR_CONFIG_OPT_CANT_BE_SET_IN_DB] = '設定選項 "%1$s" 必須設定在 config_inc.php，不可設定在資料庫。';
+$MANTIS_ERROR[ERROR_CONFIG_OPT_CANT_BE_SET_IN_DB] = '設定選項「%1$s」必須定義在 config_inc.php，不可設定在資料庫。';
 $MANTIS_ERROR[ERROR_CONFIG_OPT_BAD_SYNTAX] = '無法設定設置選項 "%1$s": %2$s';
 $MANTIS_ERROR[ERROR_LANG_STRING_NOT_FOUND] = '查無字串 "%1$s"。';
 $MANTIS_ERROR[ERROR_BUGNOTE_NOT_FOUND] = '查無註釋。';
@@ -1371,7 +1383,7 @@ $MANTIS_ERROR[ERROR_SIGNUP_NOT_MATCHING_CAPTCHA] = '確認編碼不符，請重�
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NOT_ENABLED] = '"忘記密碼" 功能未開啟。';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NO_EMAIL_SPECIFIED] = '你必須提供一個電子郵件信箱以重新設定密碼。';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NOT_MATCHING_DATA] = '沒有符合您提供資訊的帳號！';
-$MANTIS_ERROR[ERROR_LOST_PASSWORD_CONFIRM_HASH_INVALID] = '確認網址不正確或已使用過，請重新註冊。';
+$MANTIS_ERROR[ERROR_LOST_PASSWORD_CONFIRM_HASH_INVALID] = '確認網址不正確或已使用過。';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_MAX_IN_PROGRESS_ATTEMPTS_REACHED] = '目前請求數量已超出系統限制，請聯繫系統管理員。';
 $MANTIS_ERROR[ERROR_USER_CHANGE_LAST_ADMIN] = '您不可以將最後一個管理者帳號移除或降級，若要完成您目前的動作請先建立另一個管理者帳號。';
 $MANTIS_ERROR[ERROR_PAGE_REDIRECTION] = '頁面導向錯誤，請確認 config_inc.php 或 custom_*.php 檔案的 PHP 區塊 (&lt;?php ?&gt;) 之外沒有任何空白的字元。';
@@ -1409,8 +1421,8 @@ $MANTIS_ERROR[ERROR_DEPRECATED_SUPERSEDED] = '已停用的功能："%1$s"，請�
 $MANTIS_ERROR[ERROR_DISPLAY_USER_ERROR_INLINE] = '警告：系統已設定為顯示　MantisBT 錯誤 (E_USER_ERROR) 於畫面，程式將會繼續執行，這可能導致系統/資料不一致的問題。';
 $MANTIS_ERROR[ERROR_TYPE_MISMATCH] = '資料型態不相符。請開啟詳細錯誤訊息以取得進一步的資訊。';
 $MANTIS_ERROR[ERROR_BUG_CONFLICTING_EDIT] = '此問題已經由其他使用者更新，請返回問題並重新送出您的變更。';
-$MANTIS_ERROR[ERROR_SPAM_SUSPECTED] = '您已達到在 %d 秒内允許 %d 次事件的使用限制；為避免垃圾訊息產生已阻擋您的行為，請稍後再重試。';
-$MANTIS_ERROR[ERROR_FIELD_TOO_LONG] = '欄位 "%1$s" 必須小於或等於 %2$d 字元長度。';
+$MANTIS_ERROR[ERROR_SPAM_SUSPECTED] = '您已在過去 %2$d 秒內達到了可允許的 %1$d 次事件的使用限制；為避免垃圾訊息產生已阻擋您的行為，請稍後再重試。';
+$MANTIS_ERROR[ERROR_FIELD_TOO_LONG] = '欄位「%1$s」最大長度為 %2$d 字元。';
 $MANTIS_ERROR[ERROR_API_TOKEN_NAME_NOT_UNIQUE] = 'API 權杖名稱「%s」已被使用。請返回重新選擇。';
 $MANTIS_ERROR[ERROR_LOGFILE_NOT_WRITABLE] = '在 $g_log_destination「%s」指定的檔案不可寫入。';
 $MANTIS_ERROR[ERROR_MONITOR_ACCESS_TOO_LOW] = '已添加的使用者沒有足夠的存取權限來監視此問題。';
@@ -1453,3 +1465,4 @@ $s_filter_all = '全部';
 $s_filter_new = '新增';
 $s_filter_unused_tags = '未使用';
 $s_filter_unused = '未使用';
+$s_unknown = '未知';

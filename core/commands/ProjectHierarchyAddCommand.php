@@ -20,7 +20,8 @@ require_api( 'helper_api.php' );
 require_api( 'project_api.php' );
 require_api( 'project_hierarchy_api.php' );
 
-$t_soap_dir = dirname( __DIR__, 2 ) . '/api/soap/';
+global $g_absolute_path;
+$t_soap_dir = $g_absolute_path . 'api/soap/';
 require_once( $t_soap_dir . 'mc_api.php' );
 
 use Mantis\Exceptions\ClientException;
@@ -43,11 +44,11 @@ class ProjectHierarchyAddCommand extends Command {
 	 * Constructor
 	 *
 	 * $p_data['query'] is expected to contain:
-	 * - project_id (integer)
+	 * - project_id (int)
 	 *
 	 * $p_data['payload'] is expected to contain:
 	 * - project (array)
-	 * - inherit_parent (boolean)
+	 * - inherit_parent (bool)
 	 *
 	 * @param array $p_data The command data.
 	 */

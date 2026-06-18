@@ -33,6 +33,7 @@
  * @uses core.php
  * @uses config_api.php
  * @uses gpc_api.php
+ * @uses helper_api.php
  * @uses print_api.php
  * @uses string_api.php
  */
@@ -40,16 +41,26 @@
 require_once( 'core.php' );
 require_api( 'config_api.php' );
 require_api( 'gpc_api.php' );
+require_api( 'helper_api.php' );
 require_api( 'print_api.php' );
 require_api( 'string_api.php' );
 
-$f_return = gpc_get_string( 'return', '' );
+$f_return = string_sanitize_url( gpc_get_string( 'return', '' ) );
 
-$t_anonymous_account = auth_anonymous_account();
+$t_params = [
+	'username' => auth_anonymous_account(),
+	'perm_login' => false
+];
 
-if( $f_return !== '' ) {
-	$t_return = string_url( string_sanitize_url( $f_return ) );
-	print_header_redirect( 'login.php?username=' . $t_anonymous_account . '&perm_login=false&return=' . $t_return );
-} else {
-	print_header_redirect( 'login.php?username=' . $t_anonymous_account . '&perm_login=false' );
+# Anonymous login redirects straight to login.php, bypassing login_page.php
+# where the CSRF token is normally generated. Generate the token here (which
+# also seeds it into the session) and pass it in the URL so login.php's
+# form_security_validate( 'login' ) succeeds. The browser preserves PHPSESSID
+# across the redirect, so $_SESSION (where the nonce is stored) is shared.
+$t_params['login_token'] = form_security_token( 'login' );
+
+if( !is_blank( $f_return ) ) {
+	$t_params['return'] = $f_return;
 }
+
+print_header_redirect( helper_url_combine( 'login.php', $t_params ) );

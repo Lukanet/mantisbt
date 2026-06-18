@@ -36,17 +36,17 @@ jobs:
           - mysqli
           - pgsql
         php:
+          - 8.5
+          - 8.4
           - 8.3
           - 8.2
           - 8.1
-          - 8.0
-          - 7.4
         experimental: [false]
         include:
-          - php: 8.4
+          - php: 8.6
             DB: mysqli
             experimental: true
-          - php: 8.4
+          - php: 8.6
             DB: pgsql
             experimental: true
 
@@ -62,7 +62,7 @@ jobs:
     steps:
     - name: Setup PHP
       # https://setup-php.com/
-      uses: shivammathur/setup-php@2.29.0
+      uses: shivammathur/setup-php@v2
       with:
         php-version: "${{ matrix.php }}"
         extensions: mysqli, pgsql, mbstring, json, tokenizer, curl, gd, fileinfo, ldap, soap, zlib
@@ -72,7 +72,7 @@ jobs:
           sendmail_path=${{ github.workspace }}/tests/fakesendmail.sh
 
     - name: Checkout MantisBT Repository
-      uses: actions/checkout@v4.1.0
+      uses: actions/checkout@v6
 
     - run: composer install
 

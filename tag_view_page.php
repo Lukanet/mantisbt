@@ -61,7 +61,7 @@ $f_tag_id = gpc_get_int( 'tag_id' );
 tag_ensure_exists( $f_tag_id );
 $t_tag_row = tag_get( $f_tag_id );
 
-$t_name = string_display_line( $t_tag_row['name'] );
+$t_name = string_attribute( $t_tag_row['name'] );
 $t_description = string_display( $t_tag_row['description'] );
 $t_can_edit = access_has_global_level( config_get( 'tag_edit_threshold' ) );
 $t_can_edit_own = $t_can_edit || auth_get_current_user_id() == tag_get_field( $f_tag_id, 'user_id' )
@@ -89,7 +89,8 @@ if( $t_manage_tags ) {
 <div class="widget-body">
 <div class="widget-main no-padding">
 	<div class="widget-toolbox padding-8 clearfix">
-		<?php print_link_button( 'search.php?tag_string='.urlencode($t_tag_row['name']),
+		<?php print_link_button( helper_url_combine( 'search.php', [
+			'tag_string' => $t_tag_row['name'] ] ),
 			sprintf( lang_get( 'tag_filter_default' ), tag_stats_attached( $f_tag_id ) ),
 			'btn-sm pull-right'); ?>
 	</div>
@@ -118,7 +119,7 @@ if( $t_manage_tags ) {
 		<td class="category">
 			<?php echo lang_get( 'owner' ) ?>
 		</td>
-		<td><?php echo string_display_line( user_get_name($t_tag_row['user_id']) ) ?></td>
+		<td><?php echo string_attribute( user_get_name($t_tag_row['user_id']) ) ?></td>
 	</tr>
 	<tr>
 		<td class="category">
@@ -145,10 +146,11 @@ if( $t_manage_tags ) {
 			<td>
 <?php
 		foreach( $t_tags_related as $t_tag ) {
-			$t_name = string_display_line( $t_tag['name'] );
-			$t_description = string_display_line( $t_tag['description'] );
+			$t_name = string_attribute( $t_tag['name'] );
+			$t_description = string_attribute( $t_tag['description'] );
 			$t_count = $t_tag['count'];
-			$t_link = string_html_specialchars( 'search.php?tag_string='.urlencode( '+' . $t_tag_row['name'] . config_get( 'tag_separator' ) . '+' . $t_name ) );
+			$t_link = string_html_specialchars( helper_url_combine( 'search.php', [
+				'tag_string' => ( '+' . $t_tag_row['name'] . config_get( 'tag_separator' ) . '+' . $t_name ) ] ) );
 			$t_label = sprintf( lang_get( 'tag_related_issues' ), $t_tag['count'] );
 ?>
 				<div class="col-md-3 col-xs-6 no-padding">

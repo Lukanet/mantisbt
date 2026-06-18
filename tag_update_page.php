@@ -67,7 +67,7 @@ $t_redirect_page = parse_url(
 	PHP_URL_PATH
 );
 
-$t_name = string_display_line( $t_tag_row['name'] );
+$t_name = string_attribute( $t_tag_row['name'] );
 $t_description = string_display( $t_tag_row['description'] );
 
 if( !( access_has_global_level( config_get( 'tag_edit_threshold' ) )
@@ -103,7 +103,7 @@ layout_page_begin();
 		<table class="table table-bordered table-condensed table-striped">
 		<fieldset>
 			<input type="hidden" name="tag_id" value="<?php echo $f_tag_id ?>"/>
-			<input type="hidden" name="redirect" value="<?php echo $t_redirect_page ?>"/>
+			<input type="hidden" name="redirect" value="<?php echo string_html_specialchars( $t_redirect_page ) ?>"/>
 			<?php echo form_security_field( 'tag_update' ) ?>
 			<tr>
 				<td class="category">
@@ -146,7 +146,7 @@ layout_page_begin();
 					echo '</select></td>';
 				} else { ?>
 					<td class="category"><?php echo lang_get( 'owner' ); ?></td>
-					<td><?php echo string_display_line( user_get_name($t_tag_row['user_id']) ); ?></td><?php
+					<td><?php echo string_attribute( user_get_name($t_tag_row['user_id']) ); ?></td><?php
 				} ?>
 			</tr>
 			<tr>

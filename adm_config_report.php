@@ -320,8 +320,7 @@ $t_config_query = new DbQuery( $t_sql, $t_params );
 <div class="space-10"></div>
 
 <!-- CONFIGURATIONS LIST -->
-<a id="database_configuration"></a>
-<div class="widget-box widget-color-blue2">
+<div id="database_configuration" class="widget-box widget-color-blue2">
 <div class="widget-header widget-header-small">
 <h4 class="widget-title lighter">
 	<?php print_icon( 'fa-database', 'ace-icon' ); ?>
@@ -385,7 +384,7 @@ while( $t_row = $t_config_query->fetch() ) {
 					'config_option' => $v_config_id,
 					'action'        => MANAGE_CONFIG_ACTION_VIEW
 				);
-		$t_url_view = helper_url_combine( 'adm_config_page.php', http_build_query( $t_url_params ) );
+		$t_url_view = helper_url_combine( 'adm_config_page.php', $t_url_params );
 		$t_html_value = '<div class="adm_config_expand" data-config_id="' . $v_config_id . '"'
 				. ' data-project_id="' . $v_project_id . '" data-user_id="' . $v_user_id . '">'
 				. '<span class ="expand_show"><a href="' . $t_url_view . '" class="toggle small">[' . lang_get( 'show_content' ) . ']</a></span>'
@@ -400,13 +399,13 @@ while( $t_row = $t_config_query->fetch() ) {
 <!-- Repeated Info Rows -->
 			<tr class="visible-on-hover-toggle">
 				<td>
-					<?php echo ($v_user_id == 0) ? lang_get( 'all_users' ) : string_display_line( user_get_name( $v_user_id ) ) ?>
+					<?php echo ($v_user_id == 0) ? lang_get( 'all_users' ) : string_attribute( user_get_name( $v_user_id ) ) ?>
 				</td>
-				<td><?php echo string_display_line( project_get_name( $v_project_id, false ) ) ?></td>
-				<td><?php echo string_display_line( $v_config_id ) ?></td>
-				<td><?php echo string_display_line( config_get_type_string( $v_type ) ) ?></td>
+				<td><?php echo string_attribute( project_get_name( $v_project_id, false ) ) ?></td>
+				<td><?php echo string_attribute( $v_config_id ) ?></td>
+				<td><?php echo string_attribute( config_get_type_string( $v_type ) ) ?></td>
 				<td style="overflow-x:auto;"><?php echo $t_html_value ?></td>
-				<td><?php echo get_enum_element( 'access_levels', $v_access_reqd ) ?></td>
+				<td><?php echo string_attribute( get_enum_element( 'access_levels', $v_access_reqd ) ) ?></td>
 <?php
 	if( $t_read_write_access ) {
 ?>
@@ -422,7 +421,7 @@ while( $t_row = $t_config_query->fetch() ) {
 
 			# Update button
 			$t_action_params['action'] = MANAGE_CONFIG_ACTION_EDIT;
-			$t_url_edit = helper_url_combine( 'adm_config_page.php', http_build_query( $t_action_params ) );
+			$t_url_edit = helper_url_combine( 'adm_config_page.php', $t_action_params );
 			echo '<div class="pull-left">';
 			print_link_button( $t_url_edit, lang_get( 'edit' ), 'btn-xs' );
 			echo '</div>';
@@ -430,7 +429,7 @@ while( $t_row = $t_config_query->fetch() ) {
 			# Clone button
 			echo '<div class="pull-left">';
 			$t_action_params['action'] = MANAGE_CONFIG_ACTION_CLONE;
-			$t_url_clone = helper_url_combine( 'adm_config_page.php', http_build_query( $t_action_params ) );
+			$t_url_clone = helper_url_combine( 'adm_config_page.php', $t_action_params );
 			print_link_button( $t_url_clone, lang_get( 'create_child_bug_button' ), 'btn-xs' );
 			echo '</div>';
 

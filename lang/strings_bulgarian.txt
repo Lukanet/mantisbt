@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -206,7 +206,6 @@ $s_prefix_for_deleted_users = 'потребител';
 $s_administrator = 'администратор';
 $s_myself = 'Себе си';
 $s_default_access_level = 'Ниво на достъп по подразбиране';
-$s_issue_status_percentage = 'Статус на проблем (%)';
 $s_access_levels_enum_string = '10:наблюдател,25:кореспондент,40:updater,55:разработчик,70:мениджър,90:администратор';
 $s_no_access = 'няма достъп';
 $s_project_status_enum_string = '10:в развитие,30:краен продукт,50:стабилен,70:остарял';
@@ -484,7 +483,6 @@ $s_last_edited = 'Последна редакция:';
 $s_hide_content = 'Скриване на съдържанието';
 $s_show_content = 'Показване на съдържанието';
 $s_file_icon_description = '%1$s икона на файла';
-$s_unknown_file_extension = 'неизвестно';
 $s_webmaster_contact_information = 'За съдействие моля, свържете се с <a href="mailto:%1$s" title="Свържете се с разработчика посредством e-mail.">администратора</a>';
 $s_total_queries_executed = 'Общ брой изпълнени заявки: %1$d';
 $s_unique_queries_executed = 'Изпълнени уникални заявки: %1$d';
@@ -1406,3 +1404,4 @@ $s_filter_all = 'ВСИЧКИ';
 $s_filter_new = 'Нов';
 $s_filter_unused_tags = 'Неизползван';
 $s_filter_unused = 'Неизползван';
+$s_unknown = 'неизвестно';

@@ -37,12 +37,6 @@ require_api( 'constant_inc.php' );
 require_api( 'error_api.php' );
 require_api( 'http_api.php' );
 
-# Determines (once-off) whether the client is accessing this script via a
-# secure connection. If they are, we want to use the Secure cookie flag to
-# prevent the cookie from being transmitted to other domains.
-# @global boolean $g_cookie_secure_flag_enabled
-$g_cookie_secure_flag_enabled = http_is_protocol_https();
-
 /**
  * Retrieve a GPC variable.
  * If the variable is not set, the default is returned.
@@ -131,8 +125,8 @@ function gpc_get_int( $p_var_name, $p_default = null ) {
 		error_parameters( $p_var_name );
 		trigger_error( ERROR_GPC_ARRAY_UNEXPECTED, ERROR );
 	}
-	$t_val = str_replace( ' ', '', trim( $t_result ) );
-	if( !preg_match( '/^-?([0-9])*$/', $t_val ) ) {
+	$t_val = trim( (string)$t_result );
+	if( !preg_match( '/^-?[0-9]*$/', $t_val ) ) {
 		error_parameters( $p_var_name );
 		trigger_error( ERROR_GPC_NOT_NUMBER, ERROR );
 	}
@@ -206,8 +200,10 @@ function gpc_get_custom_field( $p_var_name, $p_custom_field_type, $p_default = n
 	switch( $p_custom_field_type ) {
 		case CUSTOM_FIELD_TYPE_MULTILIST:
 		case CUSTOM_FIELD_TYPE_CHECKBOX:
-			# ensure that the default is an array, if set
-			if( ( $p_default !== null ) && !is_array( $p_default ) ) {
+			# Ensure that the default is an array
+			if( $p_default === null ) {
+				$p_default = [];
+			} elseif( !is_array( $p_default ) ) {
 				$p_default = array( $p_default );
 			}
 			$t_values = gpc_get_string_array( $p_var_name, $p_default );
@@ -377,8 +373,6 @@ function gpc_get_cookie( $p_var_name, $p_default = null ) {
  * @return boolean - true on success, false on failure
  */
 function gpc_set_cookie( $p_name, $p_value, $p_expire = false, $p_path = null, $p_domain = null, $p_httponly = true, $p_samesite = null ) {
-	global $g_cookie_secure_flag_enabled;
-
 	if( false === $p_expire ) {
 		$p_expire = 0;
 	} else if( true === $p_expire ) {
@@ -403,7 +397,7 @@ function gpc_set_cookie( $p_name, $p_value, $p_expire = false, $p_path = null, $
 		'path' => $p_path,
 		'domain' => $p_domain,
 		'samesite' => $p_samesite,
-		'secure' => $g_cookie_secure_flag_enabled,
+		'secure' => http_is_protocol_https(),
 		'httponly' => $p_httponly,
 	);
 	return setcookie( $p_name, $p_value, $t_options );

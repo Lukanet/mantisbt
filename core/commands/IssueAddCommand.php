@@ -33,7 +33,8 @@ require_api( 'relationship_api.php' );
 require_api( 'string_api.php' );
 require_api( 'user_api.php' );
 
-$t_soap_dir = dirname( __DIR__, 2 ) . '/api/soap/';
+global $g_absolute_path;
+$t_soap_dir = $g_absolute_path . 'api/soap/';
 require_once( $t_soap_dir . 'mc_api.php' );
 require_once( $t_soap_dir . 'mc_enum_api.php' );
 require_once( $t_soap_dir . 'mc_issue_api.php' );
@@ -54,8 +55,9 @@ use Mantis\Exceptions\ClientException;
  *       "master_issue_id": 1234,
  *       "relationship_type": 1,      # BUG_RELATED
  *       "copy_files": true,
- *       "copy_notes": true,
- *     }
+ *       "copy_notes": true
+ *     },
+ *     "skip_moderation": false
  *   }
  * }
  */
@@ -116,7 +118,6 @@ class IssueAddCommand extends Command {
 				ERROR_EMPTY_FIELD,
 				array( 'summary' ) );
 		}
-
 		$t_summary = $t_issue['summary'];
 
 		if( !isset( $t_issue['description'] ) || is_blank( $t_issue['description'] ) )  {
@@ -125,8 +126,14 @@ class IssueAddCommand extends Command {
 				ERROR_EMPTY_FIELD,
 				array( 'description' ) );
 		}
-
 		$t_description = $t_issue['description'];
+		helper_ensure_longtext_length_valid( $t_description, 'description' );
+
+		$t_steps_to_reproduce = $t_issue['steps_to_reproduce'] ?? '';
+		helper_ensure_longtext_length_valid( $t_steps_to_reproduce, 'steps_to_reproduce' );
+
+		$t_additional_information = $t_issue['additional_information'] ?? '';
+		helper_ensure_longtext_length_valid( $t_additional_information, 'additional_information' );
 
 		if( !isset( $t_issue['project'] ) )  {
 			throw new ClientException(
@@ -322,18 +329,21 @@ class IssueAddCommand extends Command {
 					ERROR_ACCESS_DENIED );
 			}
 
-			foreach( $t_issue['files'] as $t_file ) {
-				$t_name = $t_file['name'];
-				if( strlen( $t_name ) > DB_FIELD_SIZE_FILENAME ) {
+			if( !$this->option( 'skip_moderation', false ) ) {
+				# Check if issue will be moderated - files not allowed if so
+				$t_will_moderate = event_signal( 'EVENT_REPORT_BUG_MODERATE_CHECK', array() );
+				if( $t_will_moderate ) {
 					throw new ClientException(
-						"File name too long '$t_name'",
-						ERROR_FILE_NAME_TOO_LONG,
-						array( $t_name )
-					);
+						'Files cannot be attached to issues that require moderation.',
+						ERROR_ACCESS_DENIED );
 				}
 			}
 
 			$this->files = $t_issue['files'];
+
+			foreach( $this->files as $t_file ) {
+				file_ensure_uploaded( $t_file );
+			}
 		}
 
 		# Trigger extensibility events to pre-process data before creating issue
@@ -349,6 +359,16 @@ class IssueAddCommand extends Command {
 	 */
 	protected function process() {
 		$t_issue = $this->payload( 'issue' );
+
+		if( !$this->option( 'skip_moderation', false ) ) {
+			# Allow plugins to intercept for moderation
+			# If any plugin returns true, it has queued the issue for moderation
+			$t_moderated = event_signal( 'EVENT_REPORT_BUG_MODERATE', array( $t_issue ) );
+			if( $t_moderated ) {
+				# Plugin handled the issue, return special response
+				return array( 'moderated' => true );
+			}
+		}
 
 		# Create the bug
 		$t_issue_id = $this->issue->create();

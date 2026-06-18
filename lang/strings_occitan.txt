@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -183,7 +183,6 @@ $s_prefix_for_deleted_users = 'utilizaire';
 $s_administrator = 'administrator';
 $s_myself = 'Ieu';
 $s_default_access_level = 'Nivèl d\'accès per defaut';
-$s_issue_status_percentage = 'Percentatge d\'estatut de bug';
 $s_access_levels_enum_string = '10:convidat,25:raportaire,40:testaire,55:desvolopaire,70:gestionari,90:administrator';
 $s_project_status_enum_string = '10:desvolopament,30:liurat,50:estable,70:obsolèt';
 $s_project_view_state_enum_string = '10:public,50:privat';
@@ -1217,7 +1216,7 @@ $MANTIS_ERROR[ERROR_TOKEN_NOT_FOUND] = 'Geton introbable.';
 $MANTIS_ERROR[ERROR_EVENT_UNDECLARED] = 'L\'eveniment « %1$s » es indefinit.';
 $MANTIS_ERROR[ERROR_PLUGIN_NOT_REGISTERED] = 'Lo modul « %1$s » es pas enregistrat.';
 $MANTIS_ERROR[ERROR_PLUGIN_ALREADY_INSTALLED] = 'Lo modul « %1$s » es ja installat.';
-$MANTIS_ERROR[ERROR_PLUGIN_PAGE_NOT_FOUND] = 'La pagina « %2$s » existís pas dins lo modul « %1$s ».';
+$MANTIS_ERROR[ERROR_PLUGIN_PAGE_NOT_FOUND] = 'La pagina «%2$s» non existís dins lo modul «%1$s».';
 $MANTIS_ERROR[ERROR_PLUGIN_INSTALL_FAILED] = 'Fracàs de l\'installacion del plugin: %1$s.';
 $MANTIS_ERROR[ERROR_PLUGIN_UPGRADE_FAILED] = 'La mesa a jorn del l\'esquèma pel ligicial antispam a fracassat en blôt #%1$s.';
 $MANTIS_ERROR[ERROR_PLUGIN_UPGRADE_NEEDED] = 'Lo modul « %1$s » deu èsser mes a jorn abans de poder accedir a aquesta pagina.';

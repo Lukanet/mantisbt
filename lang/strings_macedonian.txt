@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -194,10 +194,9 @@ $s_prefix_for_deleted_users = 'корисник';
 $s_administrator = 'администратор';
 $s_myself = 'Јас';
 $s_default_access_level = 'Основно ниво на пристап';
-$s_issue_status_percentage = 'Статус на проблем (%)';
 $s_access_levels_enum_string = '10:посматрач,25:пријавувач,40:подновувач,55:разработувач,70:раководител,90:администратор';
 $s_no_access = 'нема пристап';
-$s_project_status_enum_string = '10:во развој,30:пуштен,50:устојчив,70:застарен';
+$s_project_status_enum_string = '10:во развој,30:пуштен,50:постојан,70:застарен';
 $s_project_view_state_enum_string = '10:јавна,50:лична';
 $s_view_state_enum_string = '10:јавна,50:лична';
 $s_priority_enum_string = '10:нема,20:низок,30:нормален,40:висок,50:итен,60:неодложен';
@@ -222,6 +221,9 @@ $s_reset_request_msg = 'Некој (веројатно Вие) побарал п
 Ако промената сте ја побарале Вие, посетете ја следнава URL-адреса за да си ја смените лозинката:';
 $s_reset_request_admin_msg = 'Вашата лозинка е спремна за поднова. Појдете на следнава адреса за да зададете нова:';
 $s_reset_request_in_progress_msg = 'Ако го наведовте правилното корисничко име и е-пошта за вашата сметка, тоа значи дека на наведената адреса веќе е испратена потврдна порака. Откако ќе ја примите пораката, проследете ги наведените напатствија за да си ја смените лозинката.';
+$s_verify_email_msg = 'Некој (веројатно вие) ја изменил е-поштата поврзана со долунаведената сметка. Старата е-пошта ќе остане активна сè додека не ја потврдите оваа промена.
+
+За да ја потврдите новата е-пошта, појдете на следнава адреса:';
 $s_email_notification_title_for_status_bug_new = 'Следниов проблем сега има статус на НОВ (повторно)';
 $s_email_notification_title_for_status_bug_feedback = 'Следниов проблем бара ОДЅИВ.';
 $s_email_notification_title_for_status_bug_acknowledged = 'Следниов проблем е ПРИМЕН.';
@@ -472,13 +474,14 @@ $s_last_edited = 'Последно уредување:';
 $s_hide_content = 'Скриј содржина';
 $s_show_content = 'Прикажи содржина';
 $s_file_icon_description = 'Податотечна иконка на %1$s';
-$s_unknown_file_extension = 'непознато';
 $s_webmaster_contact_information = 'Обратете се кај <a href="mailto:%1$s" title="Contact the webmaster via e-mail.">администраторот</a> за помош';
 $s_total_queries_executed = 'Вкупно извршени барања: %1$d';
 $s_unique_queries_executed = 'Извршени посебни барања: %1$d';
 $s_total_query_execution_time = 'Вкупно време на исполнување на барањето: %1$s секунди';
 $s_page_execution_time = 'Време за исполнување на страницата: %1$s секунди';
 $s_memory_usage = 'Искористен склад: %1$s КиБ';
+$s_debug_log = 'Дневник на отстранување грешки';
+$s_debug_log_empty = 'Дневникот е празен.';
 $s_log_page_number = 'Број';
 $s_log_page_time = 'Време на исполнување';
 $s_log_page_caller = 'Повикувач';
@@ -509,6 +512,10 @@ $s_lost_password_done_title = 'Пораката со лозинката е ис�
 $s_lost_password_subject = 'Менување лозинка';
 $s_lost_password_info = 'За враќање на загубената лозинка, внесете го името и е-поштенската адреса на сметката.<br /><br />Ако податоците се совпаѓаат со важечка сметка, ќе ви биде испратена посебна URL-адреса по е-пошта која содржи потврден код за вашата сметка. Проследете ја врската за да си ја смените лозинката.';
 $s_lost_password_confirm_hash_OK = 'Вашата потврда е прифатена. Подновете си ја лозинката.';
+$s_verify_email_title = 'Потврди е-пошта';
+$s_verify_email_pending = 'Новата е-пошта „%1$s“ чека на потврда.';
+$s_verify_email_warning = 'Вашата нова е-пошта „%1$s“ е потврдена.';
+$s_verify_email_confirm_msg = 'За да ја потврдите смената на е-пошта ќе добиете потврдна порака испратена на „%1$s“. Старата е-пошта ќе остане активна сè додека не се потврди новата.';
 $s_open_and_assigned_to_me_label = 'Отворени и доделени на мене:';
 $s_open_and_reported_to_me_label = 'Отворени и пријавени од мене:';
 $s_newer_news_link = 'Понови новости';
@@ -564,6 +571,7 @@ $s_date_created = 'Создадена на';
 $s_last_visit = 'Последна посета';
 $s_last_visit_label = 'Последна посета:';
 $s_failed_login_count = 'Неуспешни најави';
+$s_locked = 'Сметката е заклучена';
 $s_edit_user_link = 'Уреди корисник';
 $s_search_user_hint = 'Корисничко име, вистинско име и е-пошта';
 $s_separate_list_items_by = '(одделувајте ги ставките во списокот со „%1$s“)';
@@ -745,6 +753,7 @@ $s_prune_accounts_button = 'Исчисти';
 $s_confirm_account_pruning = 'Дали сте сигурни дека сакате да ги избришете старите сметки коишто никогаш се немаат најавено?';
 $s_edit_user_title = 'Уреди корисник';
 $s_account_unlock_button = 'Отклучи сметка';
+$s_clear_failed_logins = 'Исчисти неуспешни најави';
 $s_reset_password_button = 'Смени лозинка';
 $s_delete_user_button = 'Избриши корисник';
 $s_impersonate_user_button = 'Имитирај корисник';
@@ -754,6 +763,7 @@ $s_email_not_unique = 'Е-поштенската адреса е поврзан�
 $s_account_reset_msg = 'На е-поштенската адреса на одбраниот корисник е испратено е барање за потврда. Со помош на ова барање корисникот ќе може да си ја смени лозинката.';
 $s_account_reset_msg2 = 'Лоинката е поставена како празна...';
 $s_account_unlock_msg = 'Сметката е отклучена.';
+$s_clear_failed_logins_msg = 'Бројот на неуспешни најави е избришан.';
 $s_manage_user_updated_msg = 'Сметката е успешно подновена...';
 $s_email_user_updated_subject = 'Сметката е подновена';
 $s_email_user_updated_msg = 'Вашата сметка е подновена од администратор. Подолу е наведен список на тие промени. Можете да ги подновите поединостите во сметката и нагодувањата во секое време, со посета на следнава URL-адреса:';
@@ -843,6 +853,7 @@ $s_assign_to = 'Додели на';
 $s_additional_information = 'Дополнителни информации';
 $s_submit_report_button = 'Поднеси пријава';
 $s_check_report_more_bugs = 'штиклирајте за да пријавите повеќе проблеми';
+$s_submitted_for_moderation = 'Вашето дејство е поднесено за модерација и ќе се појави откако ќе биде одобрено.';
 $s_report_stay = 'Задршка на пријавата';
 $s_selected_project = 'Одбран проект';
 $s_valid_project_msg = 'Мора да изберете важечки проект.';
@@ -1353,7 +1364,7 @@ $MANTIS_ERROR[ERROR_SIGNUP_NOT_MATCHING_CAPTCHA] = 'Тарабниот код з
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NOT_ENABLED] = 'Функцијата за изгубена лозинка е недостапна.';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NO_EMAIL_SPECIFIED] = 'Мора да наведете е-поштенска адреса за да можете да ја смените лозинка.';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_NOT_MATCHING_DATA] = 'Наведените податоци не се совпаѓаат со ниедна постоечка сметка!';
-$MANTIS_ERROR[ERROR_LOST_PASSWORD_CONFIRM_HASH_INVALID] = 'Потврдната URL е неважечка или веќе е искористена. Зачленете се одново.';
+$MANTIS_ERROR[ERROR_LOST_PASSWORD_CONFIRM_HASH_INVALID] = 'Потврдната URL е неважечка или веќе е искористена.';
 $MANTIS_ERROR[ERROR_LOST_PASSWORD_MAX_IN_PROGRESS_ATTEMPTS_REACHED] = 'Достигнат е најголемиот дозволен број на барања во тек. Контактирајте го системскиот администратор.';
 $MANTIS_ERROR[ERROR_USER_CHANGE_LAST_ADMIN] = 'Не можете да ја отстраните или обесправите последната администраторска сметка. Ова може да се направи само ако прво создадете друга администраторска сметка.';
 $MANTIS_ERROR[ERROR_PAGE_REDIRECTION] = 'Грешка со пренасочувањето на страницата; уверете се дека нема празни места вон PHP блокот (&lt;?php ?&gt;) во config_inc.php или custom_*.php.';
@@ -1391,8 +1402,8 @@ $MANTIS_ERROR[ERROR_DEPRECATED_SUPERSEDED] = 'Застарена функциј�
 $MANTIS_ERROR[ERROR_DISPLAY_USER_ERROR_INLINE] = 'Предупредување: Системот е наместен да ги прикажува грешките во MantisBT (E_USER_ERROR) во самите редови. Извршувањето на програмот ќе продолжи. Ова може да доведе до проблеми со целовидноста на системот/податоците.';
 $MANTIS_ERROR[ERROR_TYPE_MISMATCH] = 'Несовпаѓање во податочните типови. Овозможете подробни пораки за грешки за да добиете повеќе информации.';
 $MANTIS_ERROR[ERROR_BUG_CONFLICTING_EDIT] = 'Проблемот е изменет од друг корисник. Навратете се  на него и повторно поднесете ги вашите промени.';
-$MANTIS_ERROR[ERROR_SPAM_SUSPECTED] = 'Го достигнавте ограничувањето за допуштени %d дејства во последните %d секунди. Дејствата се блокирани како мерка против спам. Обидете се подоцна.';
-$MANTIS_ERROR[ERROR_FIELD_TOO_LONG] = 'Полето „%1$s“ мора да биде пократко или еднакво на %2$d знаци.';
+$MANTIS_ERROR[ERROR_SPAM_SUSPECTED] = 'Го достигнавте ограничувањето за допуштени %1$d дејства во последните %$2d секунди. Дејствата се блокирани како мерка против спам. Обидете се подоцна.';
+$MANTIS_ERROR[ERROR_FIELD_TOO_LONG] = 'Максималната должина на полето „%1$s“ изнесува %2$d знаци.';
 $MANTIS_ERROR[ERROR_API_TOKEN_NAME_NOT_UNIQUE] = 'Називот на извршничката шифра „%s“ веќе се користи. Вратете се и одберете друга.';
 $MANTIS_ERROR[ERROR_LOGFILE_NOT_WRITABLE] = 'Укажаната податотека во $g_log_destination „%s“ е незапислива.';
 $MANTIS_ERROR[ERROR_MONITOR_ACCESS_TOO_LOW] = 'Додадениот корисник нема доволно права на пристап за да го надгледува проблемов.';
@@ -1435,3 +1446,4 @@ $s_filter_all = 'Сите';
 $s_filter_new = 'Нови';
 $s_filter_unused_tags = 'Неискористени';
 $s_filter_unused = 'Неискористени';
+$s_unknown = 'непознато';

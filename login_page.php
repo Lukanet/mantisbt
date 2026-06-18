@@ -32,6 +32,7 @@
  * @uses current_user_api.php
  * @uses database_api.php
  * @uses gpc_api.php
+ * @uses helper_api.php
  * @uses html_api.php
  * @uses lang_api.php
  * @uses print_api.php
@@ -47,6 +48,7 @@ require_api( 'constant_inc.php' );
 require_api( 'current_user_api.php' );
 require_api( 'database_api.php' );
 require_api( 'gpc_api.php' );
+require_api( 'helper_api.php' );
 require_api( 'html_api.php' );
 require_api( 'lang_api.php' );
 require_api( 'print_api.php' );
@@ -84,7 +86,7 @@ $t_form_title = lang_get( 'login_title' );
 if( auth_is_user_authenticated() && !current_user_is_anonymous() ) {
 	# If return URL is specified redirect to it; otherwise use default page
 	if( !is_blank( $f_return ) ) {
-		print_header_redirect( $f_return, false, false, true );
+		print_header_redirect( $f_return, false, true );
 	} else {
 		print_header_redirect( config_get_global( 'default_home_page' ) );
 	}
@@ -99,17 +101,14 @@ if( auth_automatic_logon_bypass_form() ) {
 	}
 
 	if( !is_blank( $f_return ) ) {
-		$t_uri .= '?return=' . string_url( $f_return );
+		$t_uri = helper_url_combine( $t_uri, [ 'return' => $f_return ] );
 	}
 
 	print_header_redirect( $t_uri );
 	exit;
 }
 
-# Login page shouldn't be indexed by search engines
-html_robots_noindex();
-
-layout_login_page_begin();
+layout_login_page_begin( $t_form_title );
 ?>
 
 <div class="col-md-offset-3 col-md-6 col-sm-10 col-sm-offset-1">
@@ -227,7 +226,8 @@ if( config_get_global( 'admin_checks' ) == ON ) {
 				echo '<input type="hidden" name="install" value="true" />';
 			}
 
-			# CSRF protection not required here - form does not result in modifications
+			# Generating CSRF token to reduce risk of a vulnerability escalating its impact
+			echo form_security_field( 'login' );
 			?>
 
 			<label for="username" class="block clearfix">
@@ -266,7 +266,11 @@ if( $t_show_anonymous_login || $t_show_signup ) {
 	echo '<div class="toolbar center">';
 
 	if( $t_show_anonymous_login ) {
-		echo '<a class="back-to-login-link pull-right" href="login_anon.php?return=' . string_url( $f_return ) . '">' . lang_get( 'login_anonymously' ) . '</a>';
+		echo '<a class="back-to-login-link pull-right" href="',
+			helper_url_combine( 'login_anon.php', [
+				'return' => $f_return
+			] ),
+			'">', lang_get( 'login_anonymously' ), '</a>';
 	}
 
 	if( $t_show_signup ) {

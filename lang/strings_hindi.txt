@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,6 +47,7 @@
  * @author Sfic
  * @author Shypoetess
  * @author Smtchahal
+ * @author संजीव कुमार
  */
 
 $s_actiongroup_menu_copy = 'प्रतिलिपि';
@@ -197,7 +198,6 @@ $s_prefix_for_deleted_users = 'प्रयोक्ता';
 $s_administrator = 'प्रशासक';
 $s_myself = 'स्वयं';
 $s_default_access_level = 'स्वतः प्रवेश स्तर';
-$s_issue_status_percentage = 'कार्यबिन्दुओं की स्थिति का प्रतिशत';
 $s_access_levels_enum_string = '10:पाठक,25:प्रतिवेदक,40:परिवर्जक,55:विकासकर्ता,70:प्रबंधक,90:प्रशासक';
 $s_no_access = 'प्रवेश निषेध';
 $s_project_status_enum_string = '10:विकास,30:प्रकाशित,50:स्थिर,70:अप्रचलित';
@@ -475,7 +475,6 @@ $s_last_edited = 'अंतिम संपादन';
 $s_hide_content = 'विषय-सामिग्री छिपाएं';
 $s_show_content = 'विषय-सामिग्री दिखाएं';
 $s_file_icon_description = '%1$s फाइल चिन्ह';
-$s_unknown_file_extension = 'अज्ञात';
 $s_webmaster_contact_information = 'सहायता के लिए <a href="mailto:%1$s" title="Contact the webmaster via e-mail.">administrator</a> से संपर्क करें';
 $s_total_queries_executed = 'कुल सीक्वेल निवेदनों की संख्या: %1$d';
 $s_unique_queries_executed = 'विशिष्ट सीक्वेल निवेदनों की संख्या: %1$d';
@@ -1228,7 +1227,7 @@ $MANTIS_ERROR[ERROR_REPORT] = 'आपके प्रतिवेदन मे�
 $MANTIS_ERROR[ERROR_NO_FILE_SPECIFIED] = 'कोई फ़ाइल नहीं बताई गई।';
 $MANTIS_ERROR[ERROR_FILE_DISALLOWED] = 'इस प्रकार की फ़ाइल की अनुमति नहीं है।';
 $MANTIS_ERROR[ERROR_DUPLICATE_PROJECT] = 'इस नाम की परियोजना पहले से मौजूद है।';
-$MANTIS_ERROR[ERROR_INVALID_FIELD_VALUE] = '\'%1$s\' के लिए अमान्य मान';
+$MANTIS_ERROR[ERROR_INVALID_FIELD_VALUE] = '"%1$s" के लिए अमान्य मान';
 $MANTIS_ERROR[ERROR_ACCESS_DENIED] = 'प्रवेश निषेध।';
 $MANTIS_ERROR[ERROR_BUGNOTE_NOT_FOUND] = 'टिप्पणी नहीं मिली.';
 $MANTIS_ERROR[ERROR_USER_BY_EMAIL_NOT_FOUND] = '"%1$s" ईमेल वाला उपयोगकर्ता नहीं मिला।';
@@ -1301,3 +1300,4 @@ $s_filter_all = 'सभी';
 $s_filter_new = 'नया';
 $s_filter_unused_tags = 'अप्रयुक्त';
 $s_filter_unused = 'अप्रयुक्त';
+$s_unknown = 'अज्ञात';

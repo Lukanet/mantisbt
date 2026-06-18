@@ -490,12 +490,24 @@ class BugData {
 			trigger_error( ERROR_EMPTY_FIELD, ERROR );
 		}
 
+		if( mb_strlen( $this->summary ) > DB_FIELD_SIZE_BUG_SUMMARY ) {
+			throw new ClientException(
+				'Field "summary" exceeds maximum length ' . DB_FIELD_SIZE_BUG_SUMMARY . '.',
+				ERROR_FIELD_TOO_LONG,
+				array( lang_get( 'summary' ), DB_FIELD_SIZE_BUG_SUMMARY )
+			);
+		}
+
 		if( $p_update_extended ) {
 			# Description field cannot be empty
 			if( is_blank( $this->description ) ) {
 				error_parameters( lang_get( 'description' ) );
 				trigger_error( ERROR_EMPTY_FIELD, ERROR );
 			}
+
+			helper_ensure_longtext_length_valid( $this->description, 'description' );
+			helper_ensure_longtext_length_valid( $this->steps_to_reproduce, 'steps_to_reproduce' );
+			helper_ensure_longtext_length_valid( $this->additional_information, 'additional_information' );
 		}
 
 		# Make sure a category is set
@@ -1777,14 +1789,24 @@ function bug_get_newest_bugnote_timestamp( $p_bug_id ) {
  * @access public
  */
 function bug_get_bugnote_stats_array( array $p_bugs_id, $p_user_id = null ) {
-	if( empty( $p_bugs_id ) ) {
-		return array();
-	}
+	global $g_cache_bug;
+
+	$t_stats = array();
 
 	$t_id_array = array();
 	foreach( $p_bugs_id as $t_id ) {
-		$t_id_array[$t_id] = (int)$t_id;
+		$c_id = (int)$t_id;
+		if( isset( $g_cache_bug[$c_id]['_stats'] ) ) {
+			$t_stats[$c_id] = $g_cache_bug[$c_id]['_stats'];
+		} else {
+			$t_id_array[$c_id] = $c_id;
+		}
 	}
+
+	if ( empty( $t_id_array ) ) {
+		return $t_stats;
+	}
+
 	if( db_is_mssql() ) {
 		# MSSQL is limited to 2100 parameters per query, see #24393
 		$t_chunks = array_chunk( $t_id_array, 2100, true );
@@ -1804,7 +1826,6 @@ function bug_get_bugnote_stats_array( array $p_bugs_id, $p_user_id = null ) {
 	$t_query->sql( sprintf( $t_sql, $t_query->sql_in( 'n.bug_id', 'bug_ids' ) ) );
 
 	$t_counter = 0;
-	$t_stats = array();
 	foreach( $t_chunks as $t_chunk_ids ) {
 		$t_current_project_id = null;
 		$t_current_bug_id = null;
@@ -1847,9 +1868,8 @@ function bug_get_bugnote_stats_array( array $p_bugs_id, $p_user_id = null ) {
 					$t_last_submit_date = $t_query_row['date_submitted'];
 					$t_stats[$c_bug_id]['last_submitted_bugnote'] = $t_query_row['id'];
 				}
-				if( isset( $t_id_array[$c_bug_id] ) ) {
-					unset( $t_id_array[$c_bug_id] );
-				}
+				$g_cache_bug[$c_bug_id]['_stats'] = $t_stats[$c_bug_id];
+				unset( $t_id_array[$c_bug_id] );
 			}
 			$t_counter++;
 		}
@@ -1858,6 +1878,7 @@ function bug_get_bugnote_stats_array( array $p_bugs_id, $p_user_id = null ) {
 	# The remaining bug ids, are those without visible notes. Save false as cached value
 	foreach( $t_id_array as $t_id ) {
 		$t_stats[$t_id] = false;
+		$g_cache_bug[$t_id]['_stats'] = false;
 	}
 	return $t_stats;
 }
@@ -2284,9 +2305,6 @@ function bug_monitor( $p_bug_id, $p_user_id ) {
 	# log new monitoring action
 	history_log_event_special( $c_bug_id, BUG_MONITOR, $c_user_id );
 
-	# updated the last_updated date
-	bug_update_date( $p_bug_id );
-
 	email_monitor_added( $p_bug_id, $p_user_id );
 
 	return true;
@@ -2375,9 +2393,6 @@ function bug_unmonitor( $p_bug_id, $p_user_id ) {
 
 	# log new un-monitor action
 	history_log_event_special( $p_bug_id, BUG_UNMONITOR, (int)$p_user_id );
-
-	# updated the last_updated date
-	bug_update_date( $p_bug_id );
 
 	return true;
 }

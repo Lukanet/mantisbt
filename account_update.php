@@ -36,6 +36,7 @@
  * @uses lang_api.php
  * @uses print_api.php
  * @uses string_api.php
+ * @uses tokens_api.php
  * @uses user_api.php
  * @uses utility_api.php
  *
@@ -55,23 +56,37 @@ require_api( 'html_api.php' );
 require_api( 'lang_api.php' );
 require_api( 'print_api.php' );
 require_api( 'string_api.php' );
+require_api( 'tokens_api.php' );
 require_api( 'user_api.php' );
 require_api( 'utility_api.php' );
 
 form_security_validate( 'account_update' );
 
+$f_verify_email = false;
+$t_new_email = null;
 $t_verify_user_id = gpc_get_int( 'verify_user_id', 0 );
 $t_account_verification = (bool)$t_verify_user_id;
 if( $t_account_verification ) {
 	# Password reset request from verify.php - validate the confirmation hash
 	$f_confirm_hash = gpc_get_string( 'confirm_hash' );
 	$t_token_confirm_hash = token_get_value( TOKEN_ACCOUNT_ACTIVATION, $t_verify_user_id );
-	if( $t_token_confirm_hash == null || $f_confirm_hash !== $t_token_confirm_hash ) {
+
+	# Email verification
+	$f_verify_email = gpc_get_bool( 'verify_email' );
+	if( $f_verify_email ) {
+		$t_new_email = token_get_value( TOKEN_ACCOUNT_CHANGE_EMAIL, $t_verify_user_id );
+	}
+
+	if( $t_token_confirm_hash == null
+		|| $f_confirm_hash !== $t_token_confirm_hash
+		|| $f_verify_email && $t_new_email === null
+	) {
 		trigger_error( ERROR_LOST_PASSWORD_CONFIRM_HASH_INVALID, ERROR );
 	}
 
-	# Make sure the token is not expired
-	if( null === token_get_value( TOKEN_ACCOUNT_VERIFY, $t_verify_user_id ) ) {
+	# Make sure the token is not expired (except for email validation)
+	if( !$f_verify_email &&
+		null === token_get_value( TOKEN_ACCOUNT_VERIFY, $t_verify_user_id ) ) {
 		trigger_error( ERROR_SESSION_NOT_VALID, ERROR );
 	}
 
@@ -89,15 +104,19 @@ if( $t_account_verification ) {
 auth_ensure_user_authenticated();
 current_user_ensure_unprotected();
 
+if( $f_verify_email ) {
+	user_set_email( $t_user_id, $t_new_email );
+	token_delete( TOKEN_ACCOUNT_CHANGE_EMAIL, $t_user_id );
+	form_security_purge( 'account_update' );
+	print_header_redirect( 'account_page.php' );
+	exit();
+}
+
 $f_email           	= gpc_get_string( 'email', '' );
 $f_realname        	= gpc_get_string( 'realname', '' );
 $f_password_current = gpc_get_string( 'password_current', '' );
 $f_password        	= gpc_get_string( 'password', '' );
 $f_password_confirm	= gpc_get_string( 'password_confirm', '' );
-
-$t_update_email = false;
-$t_update_password = false;
-$t_update_realname = false;
 
 # Do not allow blank passwords in account verification/reset
 if( $t_account_verification && is_blank( $f_password ) ) {
@@ -108,27 +127,8 @@ if( $t_account_verification && is_blank( $f_password ) ) {
 	trigger_error( ERROR_EMPTY_FIELD, ERROR );
 }
 
-$t_ldap = ( LDAP == config_get_global( 'login_method' ) );
-
-# Update email (but only if LDAP isn't being used)
-# Do not update email for a user verification
-if( !( $t_ldap && config_get_global( 'use_ldap_email' ) )
-	&& !$t_account_verification ) {
-	if( !is_blank( $f_email ) && $f_email != user_get_email( $t_user_id ) ) {
-		$t_update_email = true;
-	}
-}
-
-# Update real name (but only if LDAP isn't being used)
-if( !( $t_ldap && config_get_global( 'use_ldap_realname' ) ) ) {
-	# strip extra spaces from real name
-	$t_realname = string_normalize( $f_realname );
-	if( $t_realname != user_get_field( $t_user_id, 'realname' ) ) {
-		$t_update_realname = true;
-	}
-}
-
-# Update password if the two match and are not empty
+# Validate password if provided
+$t_update_password = false;
 if( !is_blank( $f_password ) ) {
 	if( $f_password != $f_password_confirm ) {
 		if( $t_account_verification ) {
@@ -148,10 +148,41 @@ if( !is_blank( $f_password ) ) {
 	}
 }
 
-if( $t_update_email ) {
-	user_set_email( $t_user_id, $f_email );
+# Determine if email change will require showing a verification confirmation
+$t_show_confirmation_message = false;
+$f_email = trim( $f_email );
+if( !$t_account_verification
+	&& !( ON == config_get_global( 'use_ldap_email' ) )
+	&& !is_blank( $f_email )
+	&& $f_email != user_get_email( $t_user_id )
+	&& config_get( 'send_reset_password' )
+) {
+	$t_show_confirmation_message = true;
 }
 
+# Use UserUpdateCommand for email and realname changes
+$t_user_payload = array(
+	'real_name' => $f_realname,
+);
+
+# Do not update email for account verification
+if( !$t_account_verification ) {
+	$t_user_payload['email'] = $f_email;
+}
+
+$t_data = array(
+	'query' => array(
+		'user_id' => $t_user_id
+	),
+	'payload' => array(
+		'user' => $t_user_payload,
+	)
+);
+
+$t_command = new UserUpdateCommand( $t_data );
+$t_command->execute();
+
+# Update password (not handled by UserUpdateCommand)
 if( $t_update_password ) {
 	user_set_password( $t_user_id, $f_password );
 
@@ -161,11 +192,21 @@ if( $t_update_password ) {
 	}
 }
 
-if( $t_update_realname ) {
-	/** @noinspection PhpUndefinedVariableInspection */
-	user_set_realname( $t_user_id, $t_realname );
-}
-
 form_security_purge( 'account_update' );
 
-print_header_redirect( 'index.php' );
+if( $t_show_confirmation_message ) {
+	# Display confirmation message
+	layout_page_header();
+	layout_page_begin();
+	html_operation_successful(
+		"account_page.php",
+		'<p class="bold bigger-110">' . lang_get( 'operation_successful' ) . '</p><br>'
+		. sprintf( lang_get( 'verify_email_confirm_msg' ), $f_email
+
+		)
+	);
+	layout_page_end();
+	# Do not redirect
+} else {
+	print_header_redirect( 'index.php' );
+}

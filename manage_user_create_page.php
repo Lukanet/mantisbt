@@ -49,8 +49,6 @@ auth_reauthenticate();
 
 access_ensure_global_level( config_get( 'manage_user_threshold' ) );
 
-$t_ldap = ( LDAP == config_get_global( 'login_method' ) );
-
 layout_page_header();
 
 layout_page_begin( 'manage_overview_page.php' );
@@ -61,7 +59,7 @@ print_manage_menu( 'manage_user_create_page.php' );
 <div class="space-10"></div>
 <div id="manage-user-create-div" class="form-container">
 	<form id="manage-user-create-form" method="post" action="manage_user_create.php">
-	<div class="widget-box widget-color-blue2">
+		<div class="widget-box widget-color-blue2">
 		<div class="widget-header widget-header-small">
 			<h4 class="widget-title lighter">
 				<?php print_icon( 'fa-user', 'ace-icon' ); ?>
@@ -71,10 +69,9 @@ print_manage_menu( 'manage_user_create_page.php' );
 		<div class="widget-body">
 		<div class="widget-main no-padding">
 		<div class="table-responsive">
-		<table class="table table-bordered table-condensed table-striped">
 		<fieldset>
-			<?php echo form_security_field( 'manage_user_create' ) ?>
-
+		<?php echo form_security_field( 'manage_user_create' ) ?>
+		<table class="table table-bordered table-condensed table-striped">
 			<tr>
 				<td class="category">
 					<?php echo lang_get( 'username' ) ?>
@@ -83,7 +80,7 @@ print_manage_menu( 'manage_user_create_page.php' );
 					<input type="text" id="user-username" name="username" class="input-sm" size="32" maxlength="<?php echo DB_FIELD_SIZE_USERNAME;?>" />
 				</td>
 			</tr><?php
-			if( !$t_ldap || config_get_global( 'use_ldap_realname' ) == OFF ) { ?>
+			if( !( ON == config_get_global( 'use_ldap_realname' ) ) ) { ?>
 			<tr>
 				<td class="category">
 					<?php echo lang_get( 'realname' ) ?>
@@ -93,7 +90,7 @@ print_manage_menu( 'manage_user_create_page.php' );
 				</td>
 			</tr><?php
 			}
-			if( !$t_ldap || config_get_global( 'use_ldap_email' ) == OFF ) { ?>
+			if( !( ON == config_get_global( 'use_ldap_email' ) ) ) { ?>
 			<tr>
 				<td class="category">
 					<?php echo lang_get( 'email' ) ?>
@@ -152,21 +149,20 @@ print_manage_menu( 'manage_user_create_page.php' );
 					</label>
 				</td>
 			</tr>
-			</fieldset>
-			</table>
-			</div>
-			</div>
-			</div>
+		</table>
+		</fieldset>
+		</div>
+		</div>
+		</div>
 
-			<?php event_signal( 'EVENT_MANAGE_USER_CREATE_FORM' ) ?>
+		<?php event_signal( 'EVENT_MANAGE_USER_CREATE_FORM' ) ?>
 
-			<div class="widget-toolbox padding-8 clearfix">
-				<input type="submit" class="btn btn-primary btn-white btn-round" value="<?php echo lang_get( 'create_user_button' ) ?>" />
-			</div>
+		<div class="widget-toolbox padding-8 clearfix">
+			<input type="submit" class="btn btn-primary btn-white btn-round" value="<?php echo lang_get( 'create_user_button' ) ?>" />
 		</div>
 		</div>
 	</form>
 </div>
-
+</div>
 <?php
 layout_page_end();

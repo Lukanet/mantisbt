@@ -177,6 +177,16 @@ function string_display_line_links( $p_string ) {
 }
 
 /**
+ * Prepare a single-line string for display in HTML, like the string_display_line_links()
+ * function does, but exclude any anchor tags to ensure that it can safely be used as a link.
+ * @param string $p_string String to be processed.
+ * @return string
+ */
+function string_display_line_without_links( $p_string ) {
+	return preg_replace( '/<a\s[^>]*>|<\/a>/is', '', string_display_line_links( $p_string ) );
+}
+
+/**
  * Prepare a string for display in rss
  * @param string $p_string String to be processed.
  * @return string
@@ -234,7 +244,16 @@ function string_attribute( $p_string ) {
  * @return string
  */
 function string_url( $p_string ) {
-	return rawurlencode( $p_string );
+	return rawurlencode( (string)$p_string );
+}
+
+/**
+ * Build a URL-encoded query string from an array of key value pairs.
+ * @param  array $p_params Query string parameters.
+ * @return string
+ */
+function string_build_query( array $p_params ): string {
+	return http_build_query( $p_params, '', '&', PHP_QUERY_RFC3986 );
 }
 
 /**
@@ -256,7 +275,7 @@ function string_sanitize_url( $p_url, $p_return_absolute = false ) {
 	if( preg_match( '@^(?P<path>' . preg_quote( $t_path, '@' ) . ')' . $t_pattern . '$@', $t_url, $t_matches ) ) {
 		$t_type = 1;
 	} else if( !empty( $t_short_path )
-			&& preg_match( '@^(?P<path>' . preg_quote( $t_short_path, '@' ) . ')' . $t_pattern . '$@', $t_url, $t_matches )
+			&& preg_match( '@^/*(?P<path>' . preg_quote( $t_short_path, '@' ) . ')' . $t_pattern . '$@', $t_url, $t_matches )
 	) {
 		$t_type = 2;
 	} else if( preg_match( '@^(?P<path>)' . $t_pattern . '$@', $t_url, $t_matches ) ) {
@@ -265,7 +284,7 @@ function string_sanitize_url( $p_url, $p_return_absolute = false ) {
 
 	# Check for URL's pointing to other domains
 	if( 0 == $t_type || empty( $t_matches['script'] ) ||
-		3 == $t_type && preg_match( '@(?:[^:]*)?:/*@', $t_url ) > 0 ) {
+		2 <= $t_type && preg_match( '@(?:[^:]*)?:/*@', $t_url ) > 0 ) {
 
 		return ( $p_return_absolute ? $t_path . '/' : '' ) . 'index.php';
 	}
@@ -286,10 +305,10 @@ function string_sanitize_url( $p_url, $p_return_absolute = false ) {
 		foreach( $t_pairs as $t_key => $t_value ) {
 			if( is_array( $t_value ) ) {
 				foreach( $t_value as $t_value_each ) {
-					$t_clean_pairs[] = rawurlencode( $t_key ) . '[]=' . rawurlencode( $t_value_each );
+					$t_clean_pairs[] = string_url( $t_key ) . '[]=' . string_url( $t_value_each );
 				}
 			} else {
-				$t_clean_pairs[] = rawurlencode( $t_key ) . '=' . rawurlencode( $t_value );
+				$t_clean_pairs[] = string_url( $t_key ) . '=' . string_url( $t_value );
 			}
 		}
 
@@ -301,14 +320,17 @@ function string_sanitize_url( $p_url, $p_return_absolute = false ) {
 	# encode link anchor
 	$t_anchor = '';
 	if( isset( $t_matches['anchor'] ) ) {
-		$t_anchor = '#' . rawurlencode( $t_matches['anchor'] );
+		$t_anchor = '#' . string_url( $t_matches['anchor'] );
 	}
 
 	# Return an appropriate re-combined URL string
+	$t_result = ( str_starts_with( $p_url, '/' ) ? '/' : '' ) . $t_script . $t_query . $t_anchor;
 	if( $p_return_absolute ) {
-		return $t_path . '/' . $t_script . $t_query . $t_anchor;
+		return $t_path . '/' . ltrim( $t_result, '/' );
+	} elseif( !empty( $t_script_path ) ) {
+		return $t_script_path . '/' . ltrim( $t_result, '/' );
 	} else {
-		return ( !empty( $t_script_path ) ? $t_script_path . '/' : '' ) . $t_script . $t_query . $t_anchor;
+		return $t_result;
 	}
 }
 
@@ -353,8 +375,8 @@ function string_process_bug_link( $p_string, $p_include_anchor = true, $p_detail
 							return $p_array[1] .
 								string_get_bug_view_link(
 									$c_bug_id,
-									(boolean)$p_detail_info,
-									(boolean)$p_fqdn
+									(bool)$p_detail_info,
+									(bool)$p_fqdn
 								);
 						}
 					}
@@ -440,8 +462,8 @@ function string_process_bugnote_link( $p_string, $p_include_anchor = true, $p_de
 										string_get_bugnote_view_link(
 											$t_bug_id,
 											$c_bugnote_id,
-											(boolean)$p_detail_info,
-											(boolean)$p_fqdn
+											(bool)$p_detail_info,
+											(bool)$p_fqdn
 										);
 								}
 							}
@@ -801,13 +823,19 @@ function string_get_bug_report_url() {
 }
 
 /**
- * return the complete URL link to the verify page including the confirmation hash
- * @param integer $p_user_id      A valid user identifier.
- * @param string  $p_confirm_hash The confirmation hash value to include in the link.
+ * Return the complete URL link to the verify page including the confirmation hash.
+ *
+ * @param int    $p_user_id      A valid user identifier.
+ * @param string $p_confirm_hash The confirmation hash value to include in the link.
+ * @param string $p_page         Verify Page (defaults to verify.php)
+ *
  * @return string
  */
-function string_get_confirm_hash_url( $p_user_id, $p_confirm_hash ) {
-	return config_get_global( 'path' ) . 'verify.php?id=' . string_url( $p_user_id ) . '&confirm_hash=' . string_url( $p_confirm_hash );
+function string_get_confirm_hash_url( $p_user_id, $p_confirm_hash, $p_page = 'verify.php' ) {
+	return helper_url_combine( config_get_global( 'path' ) . $p_page, [
+		'id' => $p_user_id,
+		'confirm_hash' => $p_confirm_hash
+	] );
 }
 
 /**

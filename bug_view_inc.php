@@ -34,6 +34,8 @@
  * @uses current_user_api.php
  * @uses custom_field_api.php
  * @uses date_api.php
+ * @uses datetimepicker_api.php
+ * @uses dropzone_api.php
  * @uses event_api.php
  * @uses gpc_api.php
  * @uses helper_api.php
@@ -103,6 +105,16 @@ $f_history = gpc_get_bool( 'history', config_get( 'history_default_visible' ) );
 $f_bug_id = $f_issue_id;
 $t_bug = bug_get( $f_bug_id, true );
 
+# Used in bugnote_add_inc.php
+if( !$t_force_readonly ) {
+	if( config_get( 'time_tracking_enabled' ) && config_get( 'time_tracking_stopwatch' ) ) {
+		require_api( 'datetimepicker_api.php' );
+	}
+	if( file_allow_bug_upload( $f_bug_id ) ) {
+		require_api( 'dropzone_api.php' );
+	}
+}
+
 $t_data = array(
 	'query' => array( 'id' => $f_issue_id ),
 	'options' => array( 'force_readonly' => $t_force_readonly )
@@ -137,7 +149,7 @@ echo '<div class="widget-box widget-color-blue2">';
 echo '<div class="widget-header widget-header-small">';
 echo '<h4 class="widget-title lighter">';
 print_icon( 'fa-bars', 'ace-icon' );
-echo string_display_line( $t_issue_view['form_title'] );
+echo string_attribute( $t_issue_view['form_title'] );
 echo '</h4>';
 echo '</div>';
 
@@ -212,23 +224,12 @@ echo '<div class="table-responsive">';
 echo '<table class="table table-bordered table-condensed">';
 
 if( $t_top_buttons_enabled ) {
-	echo '<thead><tr class="bug-nav">';
-	echo '<tr class="top-buttons noprint">';
-	echo '<td colspan="6">';
-	/** @noinspection PhpUnhandledExceptionInspection */
-	bug_view_action_buttons( $f_issue_id, $t_flags );
-	echo '</td>';
-	echo '</tr>';
-	echo '</thead>';
-}
-
-if( $t_bottom_buttons_enabled ) {
-	echo '<tfoot>';
-	echo '<tr class="noprint"><td colspan="6">';
+	echo '<thead>';
+	echo '<tr class="top-buttons noprint"><td colspan="6">';
 	/** @noinspection PhpUnhandledExceptionInspection */
 	bug_view_action_buttons( $f_issue_id, $t_flags );
 	echo '</td></tr>';
-	echo '</tfoot>';
+	echo '</thead>';
 }
 
 echo '<tbody>';
@@ -253,7 +254,7 @@ if( $t_flags['id_show'] || $t_flags['project_show'] || $t_flags['category_show']
 	echo '<td class="bug-id">', $t_flags['id_show'] ? $t_issue_view['id_formatted'] : '', '</td>';
 
 	# Project
-	echo '<td class="bug-project">', $t_flags['project_show'] && isset( $t_issue['project']['name'] ) ? string_display_line( $t_issue['project']['name'] ) : '', '</td>';
+	echo '<td class="bug-project">', $t_flags['project_show'] && isset( $t_issue['project']['name'] ) ? string_attribute( $t_issue['project']['name'] ) : '', '</td>';
 
 	# Category
 	echo '<td class="bug-category">';
@@ -265,12 +266,12 @@ if( $t_flags['id_show'] || $t_flags['project_show'] || $t_flags['category_show']
 			);
 			echo "&nbsp;";
 		}
-		echo string_display_line( $t_issue['category']['name'] );
+		echo string_attribute( $t_issue['category']['name'] );
 	}
 	echo '</td>';
 
 	# View Status
-	echo '<td class="bug-view-status">', $t_flags['view_state_show'] && isset( $t_issue['view_state']['label'] ) ? string_display_line( $t_issue['view_state']['label'] ) : '', '</td>';
+	echo '<td class="bug-view-status">', $t_flags['view_state_show'] && isset( $t_issue['view_state']['label'] ) ? string_attribute( $t_issue['view_state']['label'] ) : '', '</td>';
 
 	# Date Submitted
 	echo '<td class="bug-date-submitted">', $t_flags['created_at_show'] ? $t_issue_view['created_at'] : '', '</td>';
@@ -280,9 +281,7 @@ if( $t_flags['id_show'] || $t_flags['project_show'] || $t_flags['category_show']
 
 	echo '</tr>';
 
-	# spacer
-	echo '<tr class="spacer"><td colspan="6"></td></tr>';
-	echo '<tr class="hidden"></tr>';
+	print_table_spacer( 6 );
 }
 
 #
@@ -348,7 +347,7 @@ if( $t_flags['priority_show'] || $t_flags['severity_show'] || $t_flags['reproduc
 	# Priority
 	if( $t_flags['priority_show'] ) {
 		echo '<th class="bug-priority category">', lang_get( 'priority' ), '</th>';
-		echo '<td class="bug-priority">', string_display_line( $t_issue['priority']['label'] ), '</td>';
+		echo '<td class="bug-priority">', string_attribute( $t_issue['priority']['label'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -356,7 +355,7 @@ if( $t_flags['priority_show'] || $t_flags['severity_show'] || $t_flags['reproduc
 	# Severity
 	if( $t_flags['severity_show'] ) {
 		echo '<th class="bug-severity category">', lang_get( 'severity' ), '</th>';
-		echo '<td class="bug-severity">', string_display_line( $t_issue['severity']['label'] ), '</td>';
+		echo '<td class="bug-severity">', string_attribute( $t_issue['severity']['label'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -364,7 +363,7 @@ if( $t_flags['priority_show'] || $t_flags['severity_show'] || $t_flags['reproduc
 	# Reproducibility
 	if( $t_flags['reproducibility_show'] ) {
 		echo '<th class="bug-reproducibility category">', lang_get( 'reproducibility' ), '</th>';
-		echo '<td class="bug-reproducibility">', string_display_line( $t_issue['reproducibility']['label'] ), '</td>';
+		echo '<td class="bug-reproducibility">', string_attribute( $t_issue['reproducibility']['label'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -395,7 +394,7 @@ if( $t_flags['status_show'] || $t_flags['resolution_show'] ) {
 
 		echo '<td class="bug-status">';
 		print_icon( 'fa-square', 'fa-status-box ' . $t_status_css );
-		echo ' ' . string_display_line( $t_issue['status']['label'] ), '</td>';
+		echo ' ' . string_attribute( $t_issue['status']['label'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -403,7 +402,7 @@ if( $t_flags['status_show'] || $t_flags['resolution_show'] ) {
 	# Resolution
 	if( $t_flags['resolution_show'] ) {
 		echo '<th class="bug-resolution category">', lang_get( 'resolution' ), '</th>';
-		echo '<td class="bug-resolution">', string_display_line( $t_issue['resolution']['label'] ), '</td>';
+		echo '<td class="bug-resolution">', string_attribute( $t_issue['resolution']['label'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -428,7 +427,7 @@ if( $t_flags['projection_show'] || $t_flags['eta_show'] ) {
 	if( $t_flags['projection_show'] ) {
 		# Projection
 		echo '<th class="bug-projection category">', lang_get( 'projection' ), '</th>';
-		echo '<td class="bug-projection">', string_display_line( $t_issue['projection']['label'] ), '</td>';
+		echo '<td class="bug-projection">', string_attribute( $t_issue['projection']['label'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -436,7 +435,7 @@ if( $t_flags['projection_show'] || $t_flags['eta_show'] ) {
 	# ETA
 	if( $t_flags['eta_show'] ) {
 		echo '<th class="bug-eta category">', lang_get( 'eta' ), '</th>';
-		echo '<td class="bug-eta">', string_display_line( $t_issue['eta']['label'] ), '</td>';
+		echo '<td class="bug-eta">', string_attribute( $t_issue['eta']['label'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -459,7 +458,7 @@ if( ( $t_flags['profiles_platform_show'] && isset( $t_issue['platform'] ) && !is
 	# Platform
 	if( $t_flags['profiles_platform_show'] && isset( $t_issue['platform'] ) && !is_blank( $t_issue['platform'] ) ) {
 		echo '<th class="bug-platform category">', lang_get( 'platform' ), '</th>';
-		echo '<td class="bug-platform">', string_display_line( $t_issue['platform'] ), '</td>';
+		echo '<td class="bug-platform">', string_attribute( $t_issue['platform'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -467,7 +466,7 @@ if( ( $t_flags['profiles_platform_show'] && isset( $t_issue['platform'] ) && !is
 	# Operating System
 	if( $t_flags['profiles_os_show'] && isset( $t_issue['os'] ) && !is_blank( $t_issue['os'] ) ) {
 		echo '<th class="bug-os category">', lang_get( 'os' ), '</th>';
-		echo '<td class="bug-os">', string_display_line( $t_issue['os'] ), '</td>';
+		echo '<td class="bug-os">', string_attribute( $t_issue['os'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -475,7 +474,7 @@ if( ( $t_flags['profiles_platform_show'] && isset( $t_issue['platform'] ) && !is
 	# OS Version
 	if( $t_flags['profiles_os_build_show'] && isset( $t_issue['os_build'] ) && !is_blank( $t_issue['os_build'] ) ) {
 		echo '<th class="bug-os-build category">', lang_get( 'os_build' ), '</th>';
-		echo '<td class="bug-os-build">', string_display_line( $t_issue['os_build'] ), '</td>';
+		echo '<td class="bug-os-build">', string_attribute( $t_issue['os_build'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -500,7 +499,7 @@ if( ( $t_flags['versions_product_version_show'] && isset( $t_issue['version'] ) 
 	# Product Version
 	if( $t_flags['versions_product_version_show'] && isset( $t_issue['version'] ) ) {
 		echo '<th class="bug-product-version category">', lang_get( 'product_version' ), '</th>';
-		echo '<td class="bug-product-version">', string_display_line( $t_issue_view['product_version'] ), '</td>';
+		echo '<td class="bug-product-version">', string_attribute( $t_issue_view['product_version'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -508,7 +507,7 @@ if( ( $t_flags['versions_product_version_show'] && isset( $t_issue['version'] ) 
 	# Product Build
 	if( $t_flags['versions_product_build_show'] && isset( $t_issue['build'] ) ) {
 		echo '<th class="bug-product-build category">', lang_get( 'product_build' ), '</th>';
-		echo '<td class="bug-product-build">', string_display_line( $t_issue['build'] ), '</td>';
+		echo '<td class="bug-product-build">', string_attribute( $t_issue['build'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -533,7 +532,7 @@ if( ( $t_flags['versions_target_version_show'] && isset( $t_issue['target_versio
 	if( $t_flags['versions_target_version_show'] && isset( $t_issue['target_version'] ) ) {
 		# Target Version
 		echo '<th class="bug-target-version category">', lang_get( 'target_version' ), '</th>';
-		echo '<td class="bug-target-version">', string_display_line( $t_issue_view['target_version'] ), '</td>';
+		echo '<td class="bug-target-version">', string_attribute( $t_issue_view['target_version'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -541,7 +540,7 @@ if( ( $t_flags['versions_target_version_show'] && isset( $t_issue['target_versio
 	# fixed in version
 	if( $t_flags['versions_fixed_in_version_show'] && isset( $t_issue['fixed_in_version'] ) ) {
 		echo '<th class="bug-fixed-in-version category">', lang_get( 'fixed_in_version' ), '</th>';
-		echo '<td class="bug-fixed-in-version">', string_display_line( $t_issue_view['fixed_in_version'] ), '</td>';
+		echo '<td class="bug-fixed-in-version">', string_attribute( $t_issue_view['fixed_in_version'] ), '</td>';
 	} else {
 		$t_spacer += 2;
 	}
@@ -558,9 +557,7 @@ if( ( $t_flags['versions_target_version_show'] && isset( $t_issue['target_versio
 
 event_signal( 'EVENT_VIEW_BUG_DETAILS', array( $f_issue_id ) );
 
-# spacer
-echo '<tr class="spacer"><td colspan="6"></td></tr>';
-echo '<tr class="hidden"></tr>';
+print_table_spacer( 6 );
 
 #
 # Bug Details (screen wide fields)
@@ -639,9 +636,7 @@ if( !empty( $t_result['issue']['attachments'] ) ) {
 	echo '</td></tr>';
 }
 
-# spacer
-echo '<tr class="spacer"><td colspan="6"></td></tr>';
-echo '<tr class="hidden"></tr>';
+print_table_spacer( 6 );
 
 # Custom Fields
 if( isset( $t_issue['custom_fields'] ) ) {
@@ -656,12 +651,22 @@ if( isset( $t_issue['custom_fields'] ) ) {
 		echo '</td></tr>';
 	}
 
-	# spacer
-	echo '<tr class="spacer"><td colspan="6"></td></tr>';
-	echo '<tr class="hidden"></tr>';
+	print_table_spacer( 6 );
 }
 
-echo '</tbody></table>';
+echo '</tbody>';
+
+if( $t_bottom_buttons_enabled ) {
+	echo '<tfoot>';
+	echo '<tr class="noprint"><td colspan="6">';
+	/** @noinspection PhpUnhandledExceptionInspection */
+	bug_view_action_buttons( $f_issue_id, $t_flags );
+	echo '</td></tr>';
+	echo '</tfoot>';
+}
+
+echo '</table>';
+
 echo '</div></div></div></div></div>';
 
 # User list sponsoring the bug
@@ -678,15 +683,14 @@ if( $t_flags['relationships_show'] ) {
 
 # User list monitoring the bug
 if( $t_flags['monitor_show'] ) {
-	$t_collapse_block = is_collapsed( 'monitoring' );
+	$t_collapse_block = is_collapsed( 'monitors' );
 	$t_block_css = $t_collapse_block ? 'collapsed' : '';
 	$t_block_icon = $t_collapse_block ? 'fa-chevron-down' : 'fa-chevron-up';
 ?>
 	<div class="col-md-12 col-xs-12">
-	<a id="monitors"></a>
 	<div class="space-10"></div>
 
-	<div id="monitoring" class="widget-box widget-color-blue2 <?php echo $t_block_css ?>">
+	<div id="monitors" class="widget-box widget-color-blue2 <?php echo $t_block_css ?>">
 		<div class="widget-header widget-header-small">
 			<h4 class="widget-title lighter">
 				<?php print_icon( 'fa-users', 'ace-icon' ); ?>
@@ -741,7 +745,7 @@ if( $t_flags['monitor_show'] ) {
 			<br /><br />
 			<form method="post" action="bug_monitor_add.php" class="form-inline noprint">
 				<?php echo form_security_field( 'bug_monitor_add' ) ?>
-				<input type="hidden" name="bug_id" value="<?php echo (integer)$f_issue_id; ?>" />
+				<input type="hidden" name="bug_id" value="<?php echo (int)$f_issue_id; ?>" />
 				<!--suppress HtmlFormInputWithoutLabel -->
 				<input type="text" class="input-sm" id="bug_monitor_list_user_to_add" name="user_to_add" />
 				<input type="submit" class="btn btn-primary btn-sm btn-white btn-round" value="<?php echo lang_get( 'add' ) ?>" />
@@ -791,7 +795,6 @@ if( config_get( 'time_tracking_enabled' ) &&
 if( $t_flags['history_show'] && $f_history ) {
 ?>
 	<div class="col-md-12 col-xs-12">
-		<a id="history"></a>
 		<div class="space-10"></div>
 <?php
 	$t_collapse_block = is_collapsed( 'history' );
@@ -845,7 +848,7 @@ if( $t_flags['history_show'] && $f_history ) {
 					<?php print_user( $t_item['userid'] ) ?>
 				</td>
 				<td class="small-caption">
-					<?php echo string_display_line( $t_item['note'] ) ?>
+					<?php echo string_attribute( $t_item['note'] ) ?>
 				</td>
 				<td class="small-caption">
 					<?php echo ( $t_item['raw'] ? string_display_line_links( $t_item['change'] ) : $t_item['change'] ) ?>
@@ -921,12 +924,12 @@ function bug_view_relationship_get_details( $p_bug_id, BugRelationshipData $p_re
 	if( !$p_html_preview ) {
 		# choose color based on status
 		$t_status_css = html_get_status_css_fg( $t_bug->status, $t_current_user_id, $t_bug->project_id );
-		$t_relationship_info_html .= '<td><a href="' . string_get_bug_view_url( $t_related_bug_id ) . '">' . string_display_line( bug_format_id( $t_related_bug_id ) ) . '</a></td>';
+		$t_relationship_info_html .= '<td><a href="' . string_get_bug_view_url( $t_related_bug_id ) . '">' . bug_format_id( $t_related_bug_id ) . '</a></td>';
 		$t_relationship_info_html .= '<td>' . icon_get( 'fa-square', 'fa-status-box ' . $t_status_css );
-		$t_relationship_info_html .= ' <span class="issue-status" title="' . string_attribute( $t_resolution_string ) . '">' . string_display_line( $t_status_string ) . '</span></td>';
+		$t_relationship_info_html .= ' <span class="issue-status" title="' . string_attribute( $t_resolution_string ) . '">' . string_attribute( $t_status_string ) . '</span></td>';
 	} else {
-		$t_relationship_info_html .= $t_td . string_display_line( bug_format_id( $t_related_bug_id ) ) . '</td>';
-		$t_relationship_info_html .= $t_td . string_display_line( $t_status_string ) . '&#160;</td>';
+		$t_relationship_info_html .= $t_td . bug_format_id( $t_related_bug_id ) . '</td>';
+		$t_relationship_info_html .= $t_td . string_attribute( $t_status_string ) . '&#160;</td>';
 	}
 
 	# get the handler name of the related bug
@@ -939,13 +942,14 @@ function bug_view_relationship_get_details( $p_bug_id, BugRelationshipData $p_re
 
 	# add project name
 	if( $p_show_project ) {
-		$t_relationship_info_html .= $t_td . string_display_line( $t_related_project_name ) . '&#160;</td>';
+		$t_relationship_info_html .= $t_td . string_attribute( $t_related_project_name ) . '&#160;</td>';
 	}
 
 	# add summary
-	$t_relationship_info_html .= $t_td . string_display_line_links( $t_bug->summary );
+	$t_relationship_info_html .= $t_td 
+		. '<span class="padding-right-4">' . string_display_line_links( $t_bug->summary ) . '</span>';
 	if( VS_PRIVATE == $t_bug->view_state ) {
-		$t_relationship_info_html .= icon_get( 'fa-lock', '', lang_get( 'private' ) );
+		$t_relationship_info_html .= icon_get( 'fa-lock', 'ace-icon', lang_get( 'private' ) );
 	}
 
 	# add delete link if bug not read only and user has access level
@@ -1233,7 +1237,7 @@ function bug_view_button_bug_assign_to( BugData $p_bug ) {
 
 	# allow un-assigning if already assigned.
 	if( $p_bug->handler_id != 0 ) {
-		echo '<option value="0"></option>';
+		echo '<option value="0">&nbsp;</option>';
 	}
 
 	# 0 means currently selected

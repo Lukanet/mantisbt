@@ -42,7 +42,25 @@ require_api( 'html_api.php' );
 require_api( 'lang_api.php' );
 
 $g_error_parameters = array();
+
+/**
+ * Determine if inline warnings should be printed immediately (true)
+ * or at page bottom (false).
+ *
+ * True initially, layout API sets it to false when the page header has been
+ * printed. Call {@see error_delay_reporting()} to change this value.
+ *
+ * @see error_log_delayed(), error_print_delayed()
+ * @global bool $g_error_delay_reporting
+ */
+$g_error_delay_reporting = true;
+
+/**
+ * List of delayed error messages to be printed at page bottom.
+ * @global array $g_errors_delayed
+ */
 $g_errors_delayed = array();
+
 $g_error_handled = false;
 $g_error_proceed_url = null;
 $g_error_send_page_header = true;
@@ -205,12 +223,6 @@ function error_handler( $p_type, $p_error, $p_file, $p_line ) {
 	$t_error_location = 'in \'' . $p_file .'\' line ' . $p_line;
 	$t_error_description = '\'' . $p_error . '\' ' . $t_error_location;
 
-	# PHP 8.4 compatibility, deprecation of E_STRICT constant
-	# Treat such errors as E_NOTICE
-	if( PHP_VERSION_ID < 80000 && $p_type == E_STRICT ) {
-		$p_type = E_NOTICE;
-	}
-
 	switch( $p_type ) {
 		case E_WARNING:
 			$t_error_type = 'SYSTEM WARNING';
@@ -318,6 +330,11 @@ function error_handler( $p_type, $p_error, $p_file, $p_line ) {
 
 				# If HTML error output was disabled, set the HTTP response code and stop
 				if( defined( 'DISABLE_INLINE_ERROR_REPORTING' ) ) {
+					if( DISABLE_INLINE_ERROR_REPORTING == 'text' ) {
+						# Send error message as response body
+						header( 'Content-Type: text/plain' );
+						echo $t_error_description;
+					}
 					http_response_code( error_map_mantis_error_to_http_code( $p_error ) );
 					exit(1);
 				}
@@ -330,8 +347,8 @@ function error_handler( $p_type, $p_error, $p_file, $p_line ) {
 							if( auth_is_user_authenticated() ) {
 								layout_page_begin();
 							} else {
-								layout_navbar();
-								layout_main_container_begin();
+								# The simpler layout to avoid the possible endless redirect loop
+								layout_admin_page_begin();
 							}
 						}
 					} else {
@@ -382,8 +399,7 @@ function error_handler( $p_type, $p_error, $p_file, $p_line ) {
 						if( auth_is_user_authenticated() ) {
 							layout_page_end();
 						} else {
-							layout_main_container_end();
-							layout_footer();
+							layout_admin_page_end();
 						}
 					} else {
 						layout_body_javascript();
@@ -400,7 +416,8 @@ function error_handler( $p_type, $p_error, $p_file, $p_line ) {
 
 			case DISPLAY_ERROR_INLINE:
 				if( !defined( 'DISABLE_INLINE_ERROR_REPORTING' ) ) {
-					if( defined( 'DELAY_INLINE_ERROR_REPORTING')) {
+					global $g_error_delay_reporting;
+					if( $g_error_delay_reporting ) {
 						error_log_delayed( $t_error_type . ': ' . $t_error_description );
 					} else {
 						echo '<div class="alert alert-warning">', $t_error_type, ': ', $t_error_description, '</div>';
@@ -447,12 +464,15 @@ function error_convert_to_exception( $p_type, $p_error, $p_file, $p_line ) {
  * This should be called prior to trigger_error() when required, e.g. when
  * a warning could be triggered before the page layout has been sent.
  *
+ * @param bool $p_delay If true (default), inline warnings will be logged and
+ *                      display at the end of the page instead of being printed
+ *                      immediately.
+ *
  * @return void
  */
-function error_delay_reporting() {
-	if( !defined( 'DELAY_INLINE_ERROR_REPORTING' ) ) {
-		define( 'DELAY_INLINE_ERROR_REPORTING', true );
-	}
+function error_delay_reporting( bool $p_delay = true) {
+	global $g_error_delay_reporting;
+	$g_error_delay_reporting = $p_delay;
 }
 
 /**
@@ -491,6 +511,9 @@ function error_print_delayed() {
 
 		$g_errors_delayed = array();
 	}
+
+	# Make sure any subsequent inline errors are displayed
+	error_delay_reporting( false );
 }
 
 /**

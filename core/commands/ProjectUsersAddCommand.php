@@ -19,7 +19,8 @@ use Mantis\Exceptions\ClientException;
 require_api( 'authentication_api.php' );
 require_api( 'user_pref_api.php' );
 
-$t_soap_dir = dirname( __DIR__, 2 ) . '/api/soap/';
+global $g_absolute_path;
+$t_soap_dir = $g_absolute_path . 'api/soap/';
 require_once( $t_soap_dir . 'mc_api.php' );
 
 /**
@@ -102,6 +103,10 @@ class ProjectUsersAddCommand extends Command {
 		project_ensure_exists( $this->project_id );
 
 		$t_actor_id = auth_get_current_user_id();
+		# Do not allow adding a user with an access level higher than the actor's
+		if( $this->access_level > access_get_project_level( $this->project_id, $t_actor_id ) ) {
+			throw new ClientException( "Access level cannot be higher than your own", ERROR_ACCESS_DENIED );
+		}
 
 		# We should check both since we are in the project section and an
 		# admin might raise the first threshold and not realize they need

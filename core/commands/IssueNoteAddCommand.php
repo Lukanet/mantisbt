@@ -55,6 +55,10 @@ use Mantis\Exceptions\ClientException;
  *         "size": 114
  *       }
  *     ]
+ *   },
+ *   "options": {
+ *     "skip_moderation": false,
+ *     "mute": false
  *   }
  * }
  */
@@ -103,15 +107,6 @@ class IssueNoteAddCommand extends Command {
 	 * The reporter id for the note.
 	 */
 	private $reporterId = 0;
-
-	/**
-	 * Constructor
-	 *
-	 * @param array $p_data The command data.
-	 */
-	function __construct( array $p_data ) {
-		parent::__construct( $p_data );
-	}
 
 	/**
 	 * Validate the data.
@@ -202,6 +197,20 @@ class IssueNoteAddCommand extends Command {
 			if( !file_allow_bug_upload( $this->issue->id, $this->reporterId ) ) {
 				throw new ClientException( 'access denied for uploading files', ERROR_ACCESS_DENIED );
 			}
+
+			if( !$this->option( 'skip_moderation', false ) ) {
+				# Check if note will be moderated - files not allowed if so
+				$t_will_moderate = event_signal( 'EVENT_BUGNOTE_ADD_MODERATE_CHECK', array( $t_issue_id ) );
+				if( $t_will_moderate ) {
+					throw new ClientException(
+						'Files cannot be attached to notes that require moderation.',
+						ERROR_ACCESS_DENIED );
+				}
+			}
+
+			foreach( $this->files as $t_file ) {
+				file_ensure_uploaded( $t_file );
+			}
 		}
 
 		# Can reporter add time tracking information?
@@ -230,7 +239,18 @@ class IssueNoteAddCommand extends Command {
 			$g_project_override = $this->issue->project_id;
 		}
 
-		# We always set the note time to BUGNOTE, and the API will overwrite it with TIME_TRACKING
+		# Allow plugins to intercept for moderation
+		# If any plugin returns true, it has queued the note for moderation
+		if( !$this->option( 'skip_moderation', false ) ) {
+			$t_note_data = $this->data['payload'];
+			$t_moderated = event_signal( 'EVENT_BUGNOTE_ADD_MODERATE', array( $this->issue->id, $t_note_data ) );
+			if( $t_moderated ) {
+				# Plugin handled the note, return special response
+				return array( 'moderated' => true );
+			}
+		}
+
+		# We always set the note type to BUGNOTE, and the API will overwrite it with TIME_TRACKING
 		# if time tracking is not 0 and the time tracking feature is enabled.
 		$t_note_id = bugnote_add(
 			$this->issue->id,
@@ -275,7 +295,9 @@ class IssueNoteAddCommand extends Command {
 
 		# Send email explicitly from here to have file support, this will move into the API once we have
 		# proper bugnote files support in db schema and object model.
-		email_bugnote_add( $t_note_id, $t_file_infos, /* user_exclude_ids */ $t_user_ids_that_got_mention_notifications );
+		if( !$this->option( 'mute', false ) ) {
+			email_bugnote_add( $t_note_id, $t_file_infos, /* user_exclude_ids */ $t_user_ids_that_got_mention_notifications );
+		}
 
 		# Event integration
 		event_signal( 'EVENT_BUGNOTE_ADD', array( $this->issue->id, $t_note_id, $t_file_infos ) );

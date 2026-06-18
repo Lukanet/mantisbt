@@ -1,7 +1,8 @@
 <?php
 namespace Mantis\tests\rest;
 
-use Psr\Http\Message\ResponseInterface;
+use Generator;
+use stdClass;
 
 require_once 'RestIssueTest.php';
 
@@ -15,25 +16,9 @@ class RestIssueUpdateVersion extends RestBase
 	/** @var int Issue id */
 	protected $issue_id;
 
-	/** @var string REST API endpoint for projet version */
-	protected $endpoint_version;
-	protected $endpoint_issue = '/issues/';
-
-	/**
-	 * Checks that response was successful and returns JSON body as object.
-	 *
-	 * @param ResponseInterface $p_response
-	 * @param int               $p_status_code Expected HTTP status code
-	 *
-	 * @return stdClass
-	 */
-	protected function getJson( ResponseInterface $p_response, $p_status_code = HTTP_STATUS_SUCCESS ) {
-		$this->assertEquals( $p_status_code,
-			$p_response->getStatusCode(),
-			"REST API returned unexpected Status Code"
-		);
-		return json_decode( $p_response->getBody(), false );
-	}
+	/** @var string REST API endpoint for project version */
+	protected string $endpoint_version;
+	protected string $endpoint_issue = '/issues/';
 
 	/**
 	 * Get the test Issue's current state.
@@ -47,7 +32,7 @@ class RestIssueUpdateVersion extends RestBase
 		$t_issue = $this->getJson( $t_response )->issues[0];
 
 		foreach( self::VERSION_FIELDS as $t_version_field ) {
-			$this->assertObjectHasAttribute( $t_version_field, $t_issue, "'$t_version_field' is set" );
+			$this->assertObjectHasProperty( $t_version_field, $t_issue, "'$t_version_field' is set" );
 			$this->assertEquals( $this->version_id,
 				$t_issue->$t_version_field->id,
 				"'$t_version_field' id does not match"
@@ -109,7 +94,7 @@ class RestIssueUpdateVersion extends RestBase
 		$t_response = $this->builder()->patch( $this->endpoint_issue, $t_payload )->send();
 		$t_issue = $this->getJson( $t_response, $p_expected_status_code )->issues[0];
 		foreach( self::VERSION_FIELDS as $t_version_field ) {
-			$this->assertObjectNotHasAttribute($t_version_field, $t_issue, "'$t_version_field' was not unset" );
+			$this->assertObjectNotHasProperty($t_version_field, $t_issue, "'$t_version_field' was not unset" );
 		}
 	}
 

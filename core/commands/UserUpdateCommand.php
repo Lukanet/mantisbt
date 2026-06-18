@@ -22,7 +22,8 @@ require_api( 'user_api.php' );
 
 use Mantis\Exceptions\ClientException;
 
-$t_soap_dir = dirname( __DIR__, 2 ) . '/api/soap/';
+global $g_absolute_path;
+$t_soap_dir = $g_absolute_path . 'api/soap/';
 require_once( $t_soap_dir . 'mc_api.php' );
 require_once( $t_soap_dir . 'mc_account_api.php' );
 
@@ -142,16 +143,13 @@ class UserUpdateCommand extends Command {
 			$this->protected = $t_new_protected;
 		}
 
-		# LDAP
-		$t_ldap = ( LDAP == config_get_global( 'login_method' ) );
-
 		# Username
 		if( isset( $t_user['name'] ) ) {
 			$t_user['username'] = $t_user['name'];
 		}
 
 		$t_old_username = user_get_username( $this->user_id );
-		$t_new_username = isset( $t_user['username' ] ) ? trim( $t_user['username']) : null;
+		$t_new_username = isset( $t_user['username'] ) ? trim( $t_user['username'] ) : null;
 
 		if( !is_null( $t_new_username ) && $t_new_username !== $t_old_username ) {
 			user_ensure_name_unique( $t_new_username, $this->user_id );
@@ -161,19 +159,17 @@ class UserUpdateCommand extends Command {
 		}
 
 		# Real Name
-		$t_old_realname = user_get_realname( $this->user_id );
-		$t_new_realname = $t_user['real_name'] ?? null;
-
-		if( $t_new_realname ) {
-			$t_new_realname = string_normalize( $t_new_realname );
-		}
+		$t_old_realname = user_get_field( $this->user_id, 'realname' );
+		$t_new_realname = isset( $t_user['real_name'] ) ? string_normalize( $t_user['real_name'] ) : null;
 
 		# ... if realname should be set by LDAP, then fetch it.
-		if( $t_ldap && config_get_global( 'use_ldap_realname' ) ) {
+		if( ON == config_get_global( 'use_ldap_realname' ) ) {
 			$t_username = $t_new_username ?: $t_old_username;
 			$t_realname = ldap_realname_from_username( $t_username );
-			if( !is_null( $t_realname ) && $t_realname !== $t_new_username ) {
+			if( !empty( $t_realname ) ) {
 				$t_new_realname = $t_realname;
+			} elseif( empty( $t_new_realname ) ) {
+				$t_new_realname = null;
 			}
 		}
 
@@ -186,18 +182,18 @@ class UserUpdateCommand extends Command {
 		$t_new_email = isset( $t_user['email'] ) ? trim( $t_user['email'] ) : null;
 
 		# ... if email should be set by LDAP, then fetch it.
-		if( $t_ldap && config_get_global( 'use_ldap_email' ) ) {
-			$t_email = ldap_email( $this->user_id );
-			if( !is_null( $t_email ) && $t_email !== $t_old_email ) {
+		if( ON == config_get_global( 'use_ldap_email' ) ) {
+			$t_username = $t_new_username ?: $t_old_username;
+			$t_email = ldap_email_from_username( $t_username );
+			if( !empty( $t_email ) ) {
 				$t_new_email = $t_email;
+			} elseif( empty( $t_new_email ) ) {
+				$t_new_email = null;
 			}
 		}
 
 		if( !is_null( $t_new_email ) && $t_new_email !== $t_old_email ) {
-			email_ensure_valid( $t_new_email );
-			email_ensure_not_disposable( $t_new_email );
-			user_ensure_email_unique( $t_new_email, $this->user_id );
-
+			user_ensure_email_valid( $this->user_id, $t_new_email );
 			$this->email = $t_new_email;
 		}
 
@@ -268,7 +264,7 @@ class UserUpdateCommand extends Command {
 		$this->old_user = array(
 			'id' => $this->user_id,
 			'username' => $t_old_username,
-			'real_name' => $t_old_realname,
+			'realname' => $t_old_realname,
 			'email' => $t_old_email,
 			'access_level' => $t_old_access_level,
 			'enabled' => $t_old_enabled,
@@ -278,11 +274,11 @@ class UserUpdateCommand extends Command {
 		$this->new_user = array(
 			'id' => $this->user_id,
 			'username' => $t_new_username ?: $t_old_username,
-			'real_name' => !is_null( $t_new_realname ) ? $t_new_realname : $t_old_realname,
-			'email' => $t_new_email ?: $t_old_email,
+			'realname' => $t_new_realname ?? $t_old_realname,
+			'email' => $t_new_email ?? $t_old_email,
 			'access_level' => $t_new_access_level ?: $t_old_access_level,
-			'enabled' => !is_null( $t_new_enabled ) ? $t_new_enabled : $t_old_enabled,
-			'protected' => !is_null( $t_new_protected ) ? $t_new_protected : $t_old_protected
+			'enabled' => $t_new_enabled ?? $t_old_enabled,
+			'protected' => $t_new_protected ?? $t_old_protected
 		);
 	}
 
@@ -291,7 +287,7 @@ class UserUpdateCommand extends Command {
 	 *
 	 * @return array Command response
 	 *
-	 * @throws ClientException
+	 * @throws ClientException|\PHPMailer\PHPMailer\Exception
 	 */
 	protected function process() {
 		$this->update_user( $this->new_user );
@@ -326,27 +322,53 @@ class UserUpdateCommand extends Command {
 	 * authorization, triggering of events, etc.
 	 *
 	 * @param array $p_user User data
+	 *
 	 * @return void
+	 * @throws ClientException
 	 */
 	private function update_user( $p_user ) {
-		db_param_push();
+		$t_user_id = array_shift( $p_user );
 
-		$t_query = 'UPDATE {user}
-			SET username=' . db_param() . ', email=' . db_param() . ',
-				access_level=' . db_param() . ', enabled=' . db_param() . ',
-				protected=' . db_param() . ', realname=' . db_param() . '
-			WHERE id=' . db_param();
+		# Email was changed
+		if( !is_null( $this->email ) ) {
+			# Change made by user themselves
+			if( auth_get_current_user_id() == $this->user_id )  {
+				if( $this->email && config_get( 'send_reset_password' ) ) {
+					# Temporarily store the new email address in a token
+					token_set( TOKEN_ACCOUNT_CHANGE_EMAIL,
+						$this->email,
+						TOKEN_EXPIRY_ACCOUNT_ACTIVATION,
+						$t_user_id
+					);
 
-		$t_query_params = array(
-			$p_user['username'],
-			$p_user['email'],
-			$p_user['access_level'],
-			$p_user['enabled'],
-			$p_user['protected'],
-			$p_user['real_name'],
-			$p_user['id'] );
+					# Send verification mail
+					$t_confirm_hash = auth_generate_confirm_hash( $this->user_id );
+					token_set( TOKEN_ACCOUNT_ACTIVATION,
+						$t_confirm_hash,
+						TOKEN_EXPIRY_ACCOUNT_ACTIVATION,
+						$t_user_id
+					);
+					email_send_email_verification_url( $this->user_id, $t_confirm_hash, $p_user['email'] );
 
-		db_query( $t_query, $t_query_params );
+					# Do not update the user record
+					unset( $p_user['email'] );
+				}
+			} else {
+				# Clear any pending change email token
+				token_delete( TOKEN_ACCOUNT_CHANGE_EMAIL, $this->user_id );
+			}
+		}
+
+		$t_query = new DbQuery( 'UPDATE {user} SET ' );
+		$t_sql_columns = [];
+		foreach( $p_user as $t_col => $t_value ) {
+			$t_sql_columns[] = $t_col . ' = ' . $t_query->param( $t_value );
+		}
+		$t_query->append_sql(
+			implode( ', ', $t_sql_columns )
+			. ' WHERE id=' . $t_query->param( $t_user_id )
+		);
+		$t_query->execute();
 	}
 }
 

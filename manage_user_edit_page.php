@@ -91,14 +91,13 @@ if( !$t_user ) {
 # current user.
 access_ensure_global_level( $t_user['access_level'] );
 
-$t_ldap = ( LDAP == config_get_global( 'login_method' ) );
+$t_date_format = config_get( 'normal_date_format' );
 
 # User action buttons: RESET/UNLOCK, IMPERSONATE and DELETE
 $t_reset = $t_user['id'] != auth_get_current_user_id()
 	&& auth_can_set_password( $t_user['id'] )
 	&& user_is_enabled( $t_user['id'] )
 	&& !user_is_protected( $t_user['id'] );
-$t_unlock = !user_is_login_request_allowed( $t_user['id'] );
 $t_delete = !( user_is_administrator( $t_user_id )
 	&& user_count_level( config_get_global( 'admin_site_threshold' ) ) <= 1
 );
@@ -156,14 +155,14 @@ print_manage_menu( 'manage_user_page.php' );
 					<!-- Realname -->
 					<tr>
 <?php
-	if( $t_ldap && ON == config_get_global( 'use_ldap_realname' ) ) {
+	if( ON == config_get_global( 'use_ldap_realname' ) ) {
 		# With LDAP
 ?>
 						<td class="category">
 							<?php echo lang_get( 'realname_label' ) ?>
 						</td>
 						<td>
-							<?php echo string_display_line( user_get_realname( $t_user_id ) ) ?>
+							<?php echo string_attribute( user_get_realname( $t_user_id ) ) ?>
 						</td>
 <?php
 	} else {
@@ -189,14 +188,14 @@ print_manage_menu( 'manage_user_page.php' );
 					<!-- Email -->
 					<tr>
 <?php
-	if( $t_ldap && ON == config_get_global( 'use_ldap_email' ) ) {
+	if( ON == config_get_global( 'use_ldap_email' ) ) {
 		# With LDAP
 ?>
 						<td class="category">
 							<?php echo lang_get( 'email_label' ) ?>
 						</td>
 						<td>
-							<?php echo string_display_line( user_get_email( $t_user_id ) ) ?>
+							<?php echo string_attribute( user_get_email( $t_user_id ) ) ?>
 						</td>
 <?php
 	} else {
@@ -210,16 +209,8 @@ print_manage_menu( 'manage_user_page.php' );
 						<td>
 <?php
 							print_email_input( 'email', $t_user['email'] );
-							if( config_get_global( 'email_ensure_unique' )
-								&& !user_is_email_unique( $t_user['email'], $t_user_id )
-							) {
-								echo '<span class="padding-8">';
-								print_icon('fa-exclamation-triangle',
-									'ace-icon bigger-125 red  padding-right-4'
-								);
-								echo lang_get( 'email_not_unique' );
-								echo '</span>';
-							}
+							print_email_not_unique_warning( $t_user['email'], $t_user_id );
+							print_email_pending_verification_warning( $t_user_id );
 ?>
 						</td>
 <?php
@@ -279,6 +270,44 @@ print_manage_menu( 'manage_user_page.php' );
 						</td>
 					</tr>
 
+					<!-- Date Created -->
+					<tr>
+						<td class="category">
+							<?php echo lang_get( 'date_created' ) ?>
+						</td>
+						<td>
+							<?php echo date( $t_date_format, $t_user['date_created'] ); ?>
+						</td>
+					</tr>
+
+					<!-- Last Visit -->
+					<tr>
+						<td class="category">
+							<?php echo lang_get( 'last_visit' ) ?>
+						</td>
+						<td>
+							<?php echo date( $t_date_format, $t_user['last_visit'] ); ?>
+						</td>
+					</tr>
+
+					<!-- Failed Login count / locked account -->
+					<tr>
+						<td class="category">
+							<?php echo lang_get( 'failed_login_count' ) ?>
+						</td>
+						<td>
+<?php
+							$t_max_failed = config_get( 'max_failed_login_count' );
+							$t_failed_login_count = (int)$t_user['failed_login_count'];
+							$t_is_locked =  $t_failed_login_count >= $t_max_failed;
+							echo $t_failed_login_count;
+							if( OFF != $t_max_failed && $t_is_locked) {
+								echo '&nbsp;&nbsp;' . icon_get( 'lock', 'fa-lg', lang_get( 'locked' ) );
+							}
+?>
+						</td>
+					</tr>
+
 					<?php event_signal( 'EVENT_MANAGE_USER_UPDATE_FORM', array( $t_user['id'] ) ); ?>
 				</table>
 			</div>
@@ -300,6 +329,7 @@ print_manage_menu( 'manage_user_page.php' );
 					<?php echo lang_get( 'notify_user' ) ?>
 				</span>
 			</label>
+
 <?php } ?>
 			<div class="btn-group pull-right">
 <?php
@@ -320,13 +350,24 @@ print_manage_menu( 'manage_user_page.php' );
 <?php
 	}
 
-	# Reset/Unlock Button
-	if( $t_reset || $t_unlock ) {
+	# Reset Password Button
+	if( $t_reset ) {
 ?>
-				<button formaction="manage_user_reset.php"
+				<button name="reset" formaction="manage_user_reset.php"
 						title="<?php echo $t_reset_password_msg ?>"
 						class="btn btn-primary btn-white btn-round">
-					<?php echo lang_get( $t_reset ? 'reset_password_button' : 'account_unlock_button' ) ?>
+					<?php echo lang_get( 'reset_password_button' ) ?>
+				</button>
+<?php
+	}
+
+	# Unlock account button
+	if( $t_failed_login_count > 0 ) {
+		$t_btn_label = $t_is_locked ? 'account_unlock_button' : 'clear_failed_logins';
+?>
+				<button name="unlock" formaction="manage_user_reset.php"
+						class="btn btn-primary btn-white btn-round">
+					<?php echo lang_get( $t_btn_label ); ?>
 				</button>
 <?php
 	}

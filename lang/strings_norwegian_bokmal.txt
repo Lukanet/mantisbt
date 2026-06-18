@@ -2,7 +2,7 @@
 /** MantisBT - a php based bugtracking system
  *
  * Copyright (C) 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
- * Copyright (C) 2002 - 2016  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * Copyright (C) 2002 - 2026  MantisBT Team - mantisbt-dev@lists.sourceforge.net
  *
  * MantisBT is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -200,7 +200,6 @@ $s_prefix_for_deleted_users = 'bruker';
 $s_administrator = 'administrator';
 $s_myself = 'Meg selv';
 $s_default_access_level = 'Standard tilgangsnivå';
-$s_issue_status_percentage = 'Status på saken i prosent';
 $s_access_levels_enum_string = '10:Leser,25:Rapportør,40:Oppdaterer,55:Utvikler,70:Prosjektleder,90:Administrator';
 $s_no_access = 'ingen tilgang';
 $s_project_status_enum_string = '10:Utvikling,30:Release,50:Stabil,70:Uvesentlig';
@@ -307,7 +306,7 @@ $s_api_tokens_link = 'API-tegn';
 $s_api_token_create_form_title = 'Opprett API-tegn';
 $s_api_token_create_button = 'Opprett API-tegn';
 $s_api_token_name = 'Tegnnnavn';
-$s_api_token_disclose_message = 'Tegn å bruke for å få tilgang til API.';
+$s_api_token_disclose_message = 'Nøkkelen som skal brukes for å få tilgang til API-et.';
 $s_api_token_displayed_once = 'Merk at dette tegnet kun vil vises én gang.';
 $s_api_tokens_title = 'API-tegn';
 $s_api_token_revoke_button = 'Tilbakekall';
@@ -478,7 +477,6 @@ $s_last_edited = 'Sist endret:';
 $s_hide_content = 'Skjule innhold';
 $s_show_content = 'Vise innhold';
 $s_file_icon_description = '%1$s-filikon';
-$s_unknown_file_extension = 'ukjent';
 $s_webmaster_contact_information = 'Kontakt <a href="mailto:%1$s" title="Kontakt webbansvarlig per e-post.">administrator</a> for hjelp';
 $s_total_queries_executed = 'Antall spørringer utført: %1$d';
 $s_unique_queries_executed = 'Unike spørringer utført: %1$d';
@@ -1380,3 +1378,4 @@ $s_filter_all = 'Alle';
 $s_filter_new = 'NY';
 $s_filter_unused_tags = 'IKKE I BRUK';
 $s_filter_unused = 'IKKE I BRUK';
+$s_unknown = 'ukjent';
