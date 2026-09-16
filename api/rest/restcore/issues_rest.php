@@ -30,6 +30,14 @@ use Mantis\Exceptions\ClientException;
  * @var \Slim\App $g_app
  */
 $g_app->group('/issues', function() use ( $g_app ) {
+	# Bulk operations.
+	# Registered before the '/{id}' routes so that the literal 'bulk' segment
+	# is never captured as an issue id.
+	$g_app->patch( '/bulk', 'rest_issue_bulk_update' );
+	$g_app->patch( '/bulk/', 'rest_issue_bulk_update' );
+	$g_app->post( '/bulk/notes', 'rest_issue_bulk_note_add' );
+	$g_app->post( '/bulk/notes/', 'rest_issue_bulk_note_add' );
+
 	$g_app->get( '', 'rest_issue_get' );
 	$g_app->get( '/', 'rest_issue_get' );
 	$g_app->get( '/{id}', 'rest_issue_get' );
@@ -77,6 +85,386 @@ $g_app->group('/issues', function() use ( $g_app ) {
 });
 
 /**
+ * The list of issue fields that can be requested via the 'select' query parameter.
+ *
+ * This is the single source of truth for the whitelist that is implicitly
+ * implemented by mci_issue_data_as_array() in mc_issue_api.php.
+ *
+ * @return array The supported field names.
+ */
+function rest_issue_select_fields() {
+	return array(
+		'id', 'summary', 'description', 'steps_to_reproduce', 'additional_information',
+		'project', 'category', 'version', 'fixed_in_version', 'target_version',
+		'reporter', 'handler', 'status', 'resolution', 'view_state',
+		'priority', 'severity', 'reproducibility', 'projection', 'build',
+		'platform', 'os', 'os_build', 'eta', 'profile', 'sticky', 'due_date',
+		'created_at', 'updated_at', 'attachments', 'notes', 'relationships',
+		'custom_fields', 'tags', 'monitors', 'history',
+	);
+}
+
+/**
+ * Map of inline filter query parameter names to filter property constants.
+ *
+ * Uses the same naming convention as the SOAP API ($g_soap_api_to_filter_names).
+ *
+ * @return array
+ */
+function rest_issue_filter_param_map() {
+	require_api( 'filter_constants_inc.php' );
+
+	return array(
+		'search'           => FILTER_PROPERTY_SEARCH,
+		'handler_id'       => FILTER_PROPERTY_HANDLER_ID,
+		'reporter_id'      => FILTER_PROPERTY_REPORTER_ID,
+		'status_id'        => FILTER_PROPERTY_STATUS,
+		'priority_id'      => FILTER_PROPERTY_PRIORITY,
+		'severity_id'      => FILTER_PROPERTY_SEVERITY,
+		'category'         => FILTER_PROPERTY_CATEGORY_ID,
+		'resolution_id'    => FILTER_PROPERTY_RESOLUTION,
+		'note_user_id'     => FILTER_PROPERTY_NOTE_USER_ID,
+		'product_version'  => FILTER_PROPERTY_VERSION,
+		'user_monitor_id'  => FILTER_PROPERTY_MONITOR_USER_ID,
+		'hide_status_id'   => FILTER_PROPERTY_HIDE_STATUS,
+		'sort'             => FILTER_PROPERTY_SORT_FIELD_NAME,
+		'sort_direction'   => FILTER_PROPERTY_SORT_DIRECTION,
+		'sticky'           => FILTER_PROPERTY_STICKY,
+		'view_state'       => FILTER_PROPERTY_VIEW_STATE,
+		'fixed_in_version' => FILTER_PROPERTY_FIXED_IN_VERSION,
+		'target_version'   => FILTER_PROPERTY_TARGET_VERSION,
+		'tag_string'       => FILTER_PROPERTY_TAG_STRING,
+		'tag_select'       => FILTER_PROPERTY_TAG_SELECT,
+	);
+}
+
+/**
+ * Map of 'date submitted' query parameter names to filter property constants.
+ *
+ * @return array
+ */
+function rest_issue_date_submitted_param_map() {
+	require_api( 'filter_constants_inc.php' );
+
+	return array(
+		'start_day'   => FILTER_PROPERTY_DATE_SUBMITTED_START_DAY,
+		'start_month' => FILTER_PROPERTY_DATE_SUBMITTED_START_MONTH,
+		'start_year'  => FILTER_PROPERTY_DATE_SUBMITTED_START_YEAR,
+		'end_day'     => FILTER_PROPERTY_DATE_SUBMITTED_END_DAY,
+		'end_month'   => FILTER_PROPERTY_DATE_SUBMITTED_END_MONTH,
+		'end_year'    => FILTER_PROPERTY_DATE_SUBMITTED_END_YEAR,
+	);
+}
+
+/**
+ * Map of 'last updated' query parameter names to filter property constants.
+ *
+ * @return array
+ */
+function rest_issue_date_updated_param_map() {
+	require_api( 'filter_constants_inc.php' );
+
+	return array(
+		'last_update_start_day'   => FILTER_PROPERTY_LAST_UPDATED_START_DAY,
+		'last_update_start_month' => FILTER_PROPERTY_LAST_UPDATED_START_MONTH,
+		'last_update_start_year'  => FILTER_PROPERTY_LAST_UPDATED_START_YEAR,
+		'last_update_end_day'     => FILTER_PROPERTY_LAST_UPDATED_END_DAY,
+		'last_update_end_month'   => FILTER_PROPERTY_LAST_UPDATED_END_MONTH,
+		'last_update_end_year'    => FILTER_PROPERTY_LAST_UPDATED_END_YEAR,
+	);
+}
+
+/**
+ * Map of the ISO 8601 date query parameters (YYYY-MM-DD) to the legacy
+ * day / month / year parameters and filter properties they expand to.
+ *
+ * @return array
+ */
+function rest_issue_iso_date_param_map() {
+	require_api( 'filter_constants_inc.php' );
+
+	return array(
+		'created_after' => array(
+			'legacy' => array( 'start_day', 'start_month', 'start_year' ),
+			'props'  => array(
+				'day'   => FILTER_PROPERTY_DATE_SUBMITTED_START_DAY,
+				'month' => FILTER_PROPERTY_DATE_SUBMITTED_START_MONTH,
+				'year'  => FILTER_PROPERTY_DATE_SUBMITTED_START_YEAR,
+			),
+			'flag'   => FILTER_PROPERTY_FILTER_BY_DATE_SUBMITTED,
+		),
+		'created_before' => array(
+			'legacy' => array( 'end_day', 'end_month', 'end_year' ),
+			'props'  => array(
+				'day'   => FILTER_PROPERTY_DATE_SUBMITTED_END_DAY,
+				'month' => FILTER_PROPERTY_DATE_SUBMITTED_END_MONTH,
+				'year'  => FILTER_PROPERTY_DATE_SUBMITTED_END_YEAR,
+			),
+			'flag'   => FILTER_PROPERTY_FILTER_BY_DATE_SUBMITTED,
+		),
+		'updated_after' => array(
+			'legacy' => array( 'last_update_start_day', 'last_update_start_month', 'last_update_start_year' ),
+			'props'  => array(
+				'day'   => FILTER_PROPERTY_LAST_UPDATED_START_DAY,
+				'month' => FILTER_PROPERTY_LAST_UPDATED_START_MONTH,
+				'year'  => FILTER_PROPERTY_LAST_UPDATED_START_YEAR,
+			),
+			'flag'   => FILTER_PROPERTY_FILTER_BY_LAST_UPDATED_DATE,
+		),
+		'updated_before' => array(
+			'legacy' => array( 'last_update_end_day', 'last_update_end_month', 'last_update_end_year' ),
+			'props'  => array(
+				'day'   => FILTER_PROPERTY_LAST_UPDATED_END_DAY,
+				'month' => FILTER_PROPERTY_LAST_UPDATED_END_MONTH,
+				'year'  => FILTER_PROPERTY_LAST_UPDATED_END_YEAR,
+			),
+			'flag'   => FILTER_PROPERTY_FILTER_BY_LAST_UPDATED_DATE,
+		),
+	);
+}
+
+/**
+ * The list of query parameters understood by the issues GET endpoint.
+ *
+ * @return array The supported query parameter names.
+ */
+function rest_issue_known_query_params() {
+	return array_merge(
+		array( 'id', 'project_id', 'filter_id', 'select', 'page', 'page_size',
+			'count_only', 'fields' ),
+		array_keys( rest_issue_filter_param_map() ),
+		array_keys( rest_issue_date_submitted_param_map() ),
+		array_keys( rest_issue_date_updated_param_map() ),
+		array_keys( rest_issue_iso_date_param_map() )
+	);
+}
+
+/**
+ * Parse a date query parameter expressed in YYYY-MM-DD format.
+ *
+ * @param string $p_param_name The name of the query parameter.
+ * @param string $p_value      The value to parse.
+ *
+ * @return array Array with 'year', 'month' and 'day' integer entries.
+ *
+ * @throws \Mantis\Exceptions\LegacyApiFaultException If the value is not a valid date.
+ */
+function rest_issue_parse_iso_date( $p_param_name, $p_value ) {
+	$t_matches = array();
+	if( preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', (string)$p_value, $t_matches )
+		&& checkdate( (int)$t_matches[2], (int)$t_matches[3], (int)$t_matches[1] ) ) {
+		return array(
+			'year'  => (int)$t_matches[1],
+			'month' => (int)$t_matches[2],
+			'day'   => (int)$t_matches[3],
+		);
+	}
+
+	ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+		"Invalid value '$p_value' for query parameter '$p_param_name', expected format 'YYYY-MM-DD'." ) );
+}
+
+/**
+ * Check whether any part of a date bound (day / month / year) is present in the filter.
+ *
+ * @param array $p_filter The filter being built.
+ * @param array $p_props  Map of date part => filter property constant.
+ *
+ * @return boolean
+ */
+function rest_issue_date_bound_is_set( array $p_filter, array $p_props ) {
+	foreach( $p_props as $t_filter_prop ) {
+		if( isset( $p_filter[$t_filter_prop] ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Complete a half-open date range so that it means what it looks like it means.
+ *
+ * The filter core compares dates with a closed BETWEEN interval and, when one of
+ * the bounds is missing, substitutes its own defaults (1st of the current month
+ * for the lower bound, today for the upper one). An upper bound given on its own
+ * therefore yields an inverted, empty interval, and a lower bound on its own gets
+ * silently truncated at today. This fills in the open side instead:
+ *
+ * - upper bound only => lower bound becomes 1970-01-01, i.e. "anything up to X";
+ * - lower bound only => upper bound becomes 2038-01-18, i.e. "anything from X on".
+ *
+ * The far upper bound is preferred over today's date because the core builds a
+ * closed interval: using today would silently drop issues dated in the future
+ * (clock skew, imported data), which is the same class of surprise being fixed
+ * here. 2038-01-18 is used as the upper bound because it is safe for every
+ * representation a timestamp may have on the way through the filter and the
+ * database, while still being far enough in the future to never clip real data.
+ *
+ * Nothing is changed when both bounds, or neither, are present.
+ *
+ * @param array $p_filter      The filter being built, modified in place.
+ * @param array $p_start_props Map of date part => filter property for the lower bound.
+ * @param array $p_end_props   Map of date part => filter property for the upper bound.
+ *
+ * @return void
+ */
+function rest_issue_complete_date_range( array &$p_filter, array $p_start_props, array $p_end_props ) {
+	$t_has_start = rest_issue_date_bound_is_set( $p_filter, $p_start_props );
+	$t_has_end = rest_issue_date_bound_is_set( $p_filter, $p_end_props );
+
+	if( $t_has_start == $t_has_end ) {
+		return;
+	}
+
+	if( $t_has_end ) {
+		$t_props = $p_start_props;
+		$t_date = array( 'year' => 1970, 'month' => 1, 'day' => 1 );
+	} else {
+		$t_props = $p_end_props;
+		$t_date = array( 'year' => 2038, 'month' => 1, 'day' => 18 );
+	}
+
+	foreach( $t_props as $t_date_part => $t_filter_prop ) {
+		$p_filter[$t_filter_prop] = $t_date[$t_date_part];
+	}
+}
+
+/**
+ * The list of values accepted by the 'fields' query parameter.
+ *
+ * Unlike 'select', which trims down fully loaded issues, 'fields' selects a
+ * cheaper code path that never loads the issues at all. Only the projections
+ * that can be served straight from the filter query are listed here.
+ *
+ * @return array The supported 'fields' values.
+ */
+function rest_issue_fields_values() {
+	return array( 'id' );
+}
+
+/**
+ * Parse a boolean query parameter.
+ *
+ * @param string $p_param_name The name of the query parameter.
+ * @param mixed  $p_value      The raw value.
+ *
+ * @return boolean
+ *
+ * @throws \Mantis\Exceptions\LegacyApiFaultException If the value is not a boolean.
+ */
+function rest_issue_parse_bool_param( $p_param_name, $p_value ) {
+	$t_value = strtolower( trim( (string)$p_value ) );
+
+	if( in_array( $t_value, array( '1', 'true', 'yes', 'on' ), true ) ) {
+		return true;
+	}
+
+	if( in_array( $t_value, array( '0', 'false', 'no', 'off', '' ), true ) ) {
+		return false;
+	}
+
+	ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+		"Invalid value '$p_value' for query parameter '$p_param_name', expected a boolean." ) );
+}
+
+/**
+ * Resolve the filter that a list request is asking for.
+ *
+ * Mirrors the filter resolution done by mc_filter_get_issues(), including its
+ * access check, so that the lightweight code paths see exactly the same filter
+ * (and therefore the same visibility rules) as the regular one.
+ *
+ * @param array|null     $p_inline_filter The inline filter, or null if none was given.
+ * @param string|integer $p_filter_id     The requested filter id, may be empty.
+ * @param integer        $p_project_id    The project id.
+ * @param integer        $p_user_id       The user id.
+ *
+ * @return array The filter array, validated and ready for BugFilterQuery.
+ *
+ * @throws \Mantis\Exceptions\LegacyApiFaultException
+ */
+function rest_issue_resolve_filter( $p_inline_filter, $p_filter_id, $p_project_id, $p_user_id ) {
+	require_api( 'filter_api.php' );
+
+	if( $p_inline_filter !== null ) {
+		return filter_ensure_valid_filter( $p_inline_filter );
+	}
+
+	if( !mci_has_readonly_access( $p_user_id, $p_project_id ) ) {
+		ApiObjectFactory::throwIfFault( mci_fault_access_denied( $p_user_id ) );
+	}
+
+	$t_filter_id = is_blank( $p_filter_id ) ? FILTER_STANDARD_ANY : $p_filter_id;
+
+	if( is_numeric( $t_filter_id ) ) {
+		$t_filter = filter_get( $t_filter_id );
+	} else {
+		$t_filter = filter_standard_get( $t_filter_id, $p_user_id, $p_project_id );
+	}
+
+	if( $t_filter === null ) {
+		ApiObjectFactory::throwIfFault( ApiObjectFactory::faultNotFound( "Unknown filter '$t_filter_id'" ) );
+	}
+
+	if( $t_filter === false ) {
+		ApiObjectFactory::throwIfFault( ApiObjectFactory::faultServerError( "Invalid Filter '$t_filter_id'" ) );
+	}
+
+	return filter_ensure_valid_filter( $t_filter );
+}
+
+/**
+ * Build a filter query of the requested type.
+ *
+ * All query types share the same FROM / JOIN / WHERE clauses (they only differ
+ * in their SELECT list, see BugFilterQuery::helper_string_query_inner()), so the
+ * project and view state restrictions applied to the regular listing apply here
+ * unchanged.
+ *
+ * @param array   $p_filter     A validated filter array.
+ * @param integer $p_project_id The project id.
+ * @param integer $p_user_id    The user id.
+ * @param integer $p_query_type One of the BugFilterQuery::QUERY_TYPE_* constants.
+ *
+ * @return BugFilterQuery
+ */
+function rest_issue_filter_query( array $p_filter, $p_project_id, $p_user_id, $p_query_type ) {
+	return new BugFilterQuery( $p_filter, array(
+		'query_type' => $p_query_type,
+		'project_id' => $p_project_id,
+		'user_id'    => $p_user_id,
+		'use_sticky' => false,
+	) );
+}
+
+/**
+ * Number of pages a result set of the given size spans.
+ *
+ * Reproduces the pagination that filter_get_bug_rows() reports, so that the
+ * lightweight code paths return the same page_count as the regular one.
+ *
+ * @param array   $p_filter    A validated filter array.
+ * @param integer $p_bug_count The total number of matching issues.
+ * @param integer $p_page_size The requested page size.
+ *
+ * @return array Array with 'page_count' and 'per_page' entries.
+ */
+function rest_issue_pagination( array $p_filter, $p_bug_count, $p_page_size ) {
+	if( $p_bug_count == 0 ) {
+		# filter_get_bug_rows() returns before computing pagination in this case
+		return array( 'page_count' => 0, 'per_page' => (int)$p_page_size );
+	}
+
+	$t_per_page = filter_per_page( $p_filter, $p_bug_count, $p_page_size );
+
+	return array(
+		'page_count' => filter_page_count( $p_bug_count, $t_per_page ),
+		'per_page'   => $t_per_page,
+	);
+}
+
+/**
  * A method that does the work to handle getting an issue via REST API.
  *
  * @param \Slim\Http\Request  $p_request  The request.
@@ -90,10 +478,72 @@ $g_app->group('/issues', function() use ( $g_app ) {
 function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_response, array $p_args ) {
 	$t_issue_id = isset( $p_args['id'] ) ? $p_args['id'] : $p_request->getParam( 'id' );
 
+	# Warnings about the request that don't prevent it from being served.
+	$t_warnings = array();
+	$t_known_query_params = rest_issue_known_query_params();
+	foreach( array_keys( $p_request->getQueryParams() ) as $t_query_param ) {
+		if( !in_array( $t_query_param, $t_known_query_params, true ) ) {
+			$t_warnings[] = "Unknown query parameter '$t_query_param' was ignored.";
+		}
+	}
+
 	$t_select = $p_request->getParam( 'select', null );
 	if( $t_select !== null ) {
 		$t_select = explode( ',', $t_select );
 		$t_select = array_map( 'trim', $t_select );
+		$t_select = array_values( array_filter( $t_select, 'strlen' ) );
+
+		$t_unknown_fields = array_diff( $t_select, rest_issue_select_fields() );
+		if( !empty( $t_unknown_fields ) ) {
+			ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+				"Unknown field(s) in 'select': " . implode( ', ', $t_unknown_fields )
+				. '. Supported fields are: ' . implode( ', ', rest_issue_select_fields() ) . '.' ) );
+		}
+	}
+
+	# Lightweight projections: 'count_only' returns just the totals, 'fields=id'
+	# returns just the issue ids. Both skip loading the issues altogether.
+	$t_count_only = false;
+	if( $p_request->getParam( 'count_only', null ) !== null ) {
+		$t_count_only = rest_issue_parse_bool_param( 'count_only', $p_request->getParam( 'count_only' ) );
+	}
+
+	$t_fields = $p_request->getParam( 'fields', null );
+	if( $t_fields !== null ) {
+		$t_fields = trim( $t_fields );
+		if( !in_array( $t_fields, rest_issue_fields_values(), true ) ) {
+			ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+				"Unknown value '$t_fields' for query parameter 'fields'. Supported values are: "
+				. implode( ', ', rest_issue_fields_values() )
+				. ". To trim down fully loaded issues, use 'select' instead." ) );
+		}
+	}
+
+	if( $t_count_only && $t_fields !== null ) {
+		ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+			"Query parameters 'count_only' and 'fields' are mutually exclusive." ) );
+	}
+
+	if( $t_fields !== null ) {
+		# The id projection queries the ids directly and orders them by id descending,
+		# it never goes through the filter's own sort columns. Say so instead of
+		# returning a differently ordered page than the caller asked for.
+		foreach( array( 'sort', 'sort_direction' ) as $t_sort_param ) {
+			if( $p_request->getParam( $t_sort_param, null ) !== null ) {
+				$t_warnings[] = "Query parameter '$t_sort_param' was ignored: "
+					. "'fields=$t_fields' always returns ids ordered by id descending.";
+			}
+		}
+
+		if( $t_select !== null ) {
+			$t_warnings[] = "Query parameter 'select' was ignored: "
+				. "'fields=$t_fields' returns issue ids only.";
+		}
+	}
+
+	if( !is_blank( $t_issue_id ) && ( $t_count_only || $t_fields !== null ) ) {
+		ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+			"Query parameters 'count_only' and 'fields' are not supported together with 'id'." ) );
 	}
 
 	if( !is_blank( $t_issue_id ) ) {
@@ -127,9 +577,68 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 		helper_set_current_project( $t_project_id );
 
 		# Check for inline filter parameters (handler_id, reporter_id, status_id, etc.)
-		$t_inline_filter = rest_issue_build_inline_filter( $p_request, $t_project_id );
+		$t_inline_filter = rest_issue_build_inline_filter( $p_request, $t_project_id, $t_warnings );
 
-		if( $t_inline_filter !== null ) {
+		# Total number of matching issues and pages, populated by the filter calls below.
+		$t_page_count = 0;
+		$t_bug_count = 0;
+
+		if( $t_count_only || $t_fields !== null ) {
+			# Lightweight paths: resolve the filter once and query it directly,
+			# without ever materializing BugData objects.
+			$t_user_id = auth_get_current_user_id();
+			$t_filter = rest_issue_resolve_filter(
+				$t_inline_filter, $t_filter_id, $t_project_id, $t_user_id );
+
+			# TODO: we should have a better way to do this.
+			global $g_project_override;
+			$g_project_override = $t_project_id;
+
+			if( $t_count_only ) {
+				$t_query = rest_issue_filter_query( $t_filter, $t_project_id, $t_user_id,
+					BugFilterQuery::QUERY_TYPE_COUNT );
+				$t_query->execute();
+				$t_bug_count = (int)$t_query->value();
+
+				$t_pagination = rest_issue_pagination( $t_filter, $t_bug_count, $t_page_size );
+
+				$t_result = array(
+					'total_count' => $t_bug_count,
+					'page_count' => (int)$t_pagination['page_count'],
+				);
+			} else {
+				$t_subquery = rest_issue_filter_query( $t_filter, $t_project_id, $t_user_id,
+					BugFilterQuery::QUERY_TYPE_DISTINCT_IDS );
+				$t_bug_count = $t_subquery->get_bug_count();
+
+				$t_pagination = rest_issue_pagination( $t_filter, $t_bug_count, $t_page_size );
+				$t_page_count = (int)$t_pagination['page_count'];
+				$t_page_number = filter_valid_page_number( $t_page_number, $t_page_count );
+
+				$t_ids = array();
+				if( $t_bug_count > 0 ) {
+					# The id list is ordered here rather than by the filter's own sort
+					# columns: those live on joined tables that this query doesn't need,
+					# and paging requires a deterministic, stable order.
+					$t_ids_query = new DbQuery(
+						'SELECT {bug}.id FROM {bug} WHERE {bug}.id IN :filter_ids'
+						. ' ORDER BY {bug}.id DESC' );
+					$t_ids_query->bind( 'filter_ids', $t_subquery );
+					$t_ids_query->execute( array(), $t_pagination['per_page'],
+						filter_offset( $t_page_number, $t_pagination['per_page'] ) );
+
+					foreach( $t_ids_query->fetch_all() as $t_row ) {
+						$t_ids[] = array( 'id' => (int)$t_row['id'] );
+					}
+				}
+
+				$t_result = array(
+					'issues' => $t_ids,
+					'total_count' => $t_bug_count,
+					'page_count' => $t_page_count,
+				);
+			}
+		} else if( $t_inline_filter !== null ) {
 			# Use inline filter built from query parameters
 			$t_user_id = auth_get_current_user_id();
 			$t_lang = mci_get_user_lang( $t_user_id );
@@ -154,13 +663,25 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 			}
 		} else if( !empty( $t_filter_id ) ) {
 			$t_issues = mc_filter_get_issues(
-				'', '', $t_project_id, $t_filter_id, $t_page_number, $t_page_size, $t_select );
+				'', '', $t_project_id, $t_filter_id, $t_page_number, $t_page_size, $t_select,
+				$t_page_count, $t_bug_count );
 		} else {
 			$t_issues = mc_filter_get_issues(
-				'', '', $t_project_id, FILTER_STANDARD_ANY, $t_page_number, $t_page_size, $t_select );
+				'', '', $t_project_id, FILTER_STANDARD_ANY, $t_page_number, $t_page_size, $t_select,
+				$t_page_count, $t_bug_count );
 		}
 
-		$t_result = array( 'issues' => $t_issues );
+		if( !isset( $t_result ) ) {
+			$t_result = array(
+				'issues' => $t_issues,
+				'total_count' => (int)$t_bug_count,
+				'page_count' => (int)$t_page_count,
+			);
+		}
+	}
+
+	if( !empty( $t_warnings ) ) {
+		$t_result['warnings'] = $t_warnings;
 	}
 
 	$t_etag = mc_issue_hash( $t_issue_id, $t_result );
@@ -190,35 +711,15 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
  *
  * @param \Slim\Http\Request $p_request    The request.
  * @param integer            $p_project_id The project id.
+ * @param array              $p_warnings   Warnings about the request, appended to.
  * @return array|null Filter array or null if no inline filter params provided.
+ *
+ * @throws \Mantis\Exceptions\LegacyApiFaultException
  */
-function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_project_id ) {
+function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_project_id, array &$p_warnings = array() ) {
 	require_api( 'filter_constants_inc.php' );
 
-	# Map of query parameter names to filter property constants.
-	# Uses the same naming convention as the SOAP API ($g_soap_api_to_filter_names).
-	static $s_param_to_filter = array(
-		'search'           => FILTER_PROPERTY_SEARCH,
-		'handler_id'       => FILTER_PROPERTY_HANDLER_ID,
-		'reporter_id'      => FILTER_PROPERTY_REPORTER_ID,
-		'status_id'        => FILTER_PROPERTY_STATUS,
-		'priority_id'      => FILTER_PROPERTY_PRIORITY,
-		'severity_id'      => FILTER_PROPERTY_SEVERITY,
-		'category'         => FILTER_PROPERTY_CATEGORY_ID,
-		'resolution_id'    => FILTER_PROPERTY_RESOLUTION,
-		'note_user_id'     => FILTER_PROPERTY_NOTE_USER_ID,
-		'product_version'  => FILTER_PROPERTY_VERSION,
-		'user_monitor_id'  => FILTER_PROPERTY_MONITOR_USER_ID,
-		'hide_status_id'   => FILTER_PROPERTY_HIDE_STATUS,
-		'sort'             => FILTER_PROPERTY_SORT_FIELD_NAME,
-		'sort_direction'   => FILTER_PROPERTY_SORT_DIRECTION,
-		'sticky'           => FILTER_PROPERTY_STICKY,
-		'view_state'       => FILTER_PROPERTY_VIEW_STATE,
-		'fixed_in_version' => FILTER_PROPERTY_FIXED_IN_VERSION,
-		'target_version'   => FILTER_PROPERTY_TARGET_VERSION,
-		'tag_string'       => FILTER_PROPERTY_TAG_STRING,
-		'tag_select'       => FILTER_PROPERTY_TAG_SELECT,
-	);
+	$s_param_to_filter = rest_issue_filter_param_map();
 
 	# Check if any inline filter parameters are present
 	$t_has_filter_param = false;
@@ -230,11 +731,10 @@ function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_proje
 	}
 
 	# Also check date range parameters
-	static $s_date_params = array(
-		'start_day', 'start_month', 'start_year',
-		'end_day', 'end_month', 'end_year',
-		'last_update_start_day', 'last_update_start_month', 'last_update_start_year',
-		'last_update_end_day', 'last_update_end_month', 'last_update_end_year',
+	$s_date_params = array_merge(
+		array_keys( rest_issue_date_submitted_param_map() ),
+		array_keys( rest_issue_date_updated_param_map() ),
+		array_keys( rest_issue_iso_date_param_map() )
 	);
 
 	if( !$t_has_filter_param ) {
@@ -268,14 +768,7 @@ function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_proje
 	}
 
 	# Date range: submitted date
-	static $s_date_submitted_map = array(
-		'start_day'   => FILTER_PROPERTY_DATE_SUBMITTED_START_DAY,
-		'start_month' => FILTER_PROPERTY_DATE_SUBMITTED_START_MONTH,
-		'start_year'  => FILTER_PROPERTY_DATE_SUBMITTED_START_YEAR,
-		'end_day'     => FILTER_PROPERTY_DATE_SUBMITTED_END_DAY,
-		'end_month'   => FILTER_PROPERTY_DATE_SUBMITTED_END_MONTH,
-		'end_year'    => FILTER_PROPERTY_DATE_SUBMITTED_END_YEAR,
-	);
+	$s_date_submitted_map = rest_issue_date_submitted_param_map();
 
 	$t_has_date_submitted = false;
 	foreach( $s_date_submitted_map as $t_param_name => $t_filter_prop ) {
@@ -290,14 +783,7 @@ function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_proje
 	}
 
 	# Date range: last updated
-	static $s_date_updated_map = array(
-		'last_update_start_day'   => FILTER_PROPERTY_LAST_UPDATED_START_DAY,
-		'last_update_start_month' => FILTER_PROPERTY_LAST_UPDATED_START_MONTH,
-		'last_update_start_year'  => FILTER_PROPERTY_LAST_UPDATED_START_YEAR,
-		'last_update_end_day'     => FILTER_PROPERTY_LAST_UPDATED_END_DAY,
-		'last_update_end_month'   => FILTER_PROPERTY_LAST_UPDATED_END_MONTH,
-		'last_update_end_year'    => FILTER_PROPERTY_LAST_UPDATED_END_YEAR,
-	);
+	$s_date_updated_map = rest_issue_date_updated_param_map();
 
 	$t_has_date_updated = false;
 	foreach( $s_date_updated_map as $t_param_name => $t_filter_prop ) {
@@ -310,6 +796,36 @@ function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_proje
 	if( $t_has_date_updated ) {
 		$t_filter[FILTER_PROPERTY_FILTER_BY_LAST_UPDATED_DATE] = 'on';
 	}
+
+	# Date range: ISO 8601 (YYYY-MM-DD) shorthands, expanded to the day/month/year
+	# fields above; when both forms are given, the ISO one wins.
+	foreach( rest_issue_iso_date_param_map() as $t_param_name => $t_param_info ) {
+		$t_value = $p_request->getParam( $t_param_name );
+		if( $t_value === null ) {
+			continue;
+		}
+
+		$t_date = rest_issue_parse_iso_date( $t_param_name, $t_value );
+
+		foreach( $t_param_info['legacy'] as $t_legacy_param ) {
+			if( $p_request->getParam( $t_legacy_param ) !== null ) {
+				$p_warnings[] = "Query parameter '$t_legacy_param' was overridden by '$t_param_name'.";
+			}
+		}
+
+		foreach( $t_param_info['props'] as $t_date_part => $t_filter_prop ) {
+			$t_filter[$t_filter_prop] = $t_date[$t_date_part];
+		}
+		$t_filter[$t_param_info['flag']] = 'on';
+	}
+
+	# A range given with only one of its two bounds would otherwise be completed
+	# with the core's defaults, which makes an upper bound on its own match nothing.
+	$t_iso_map = rest_issue_iso_date_param_map();
+	rest_issue_complete_date_range( $t_filter,
+		$t_iso_map['created_after']['props'], $t_iso_map['created_before']['props'] );
+	rest_issue_complete_date_range( $t_filter,
+		$t_iso_map['updated_after']['props'], $t_iso_map['updated_before']['props'] );
 
 	return filter_ensure_valid_filter( $t_filter );
 }
@@ -594,6 +1110,438 @@ function rest_issue_update( \Slim\Http\Request $p_request, \Slim\Http\Response $
 
 	return $p_response->withStatus( HTTP_STATUS_SUCCESS, "Issue with id $t_issue_id Updated" )
 		->withHeader( HEADER_ETAG, mc_issue_hash( $t_issue_id, $t_result ) )
+		->withJson( $t_result );
+}
+
+/**
+ * Maximum number of issue ids accepted by a single bulk request.
+ *
+ * Bulk operations run every issue through the same code path as the single-issue
+ * operation (history, events, notifications), so the batch size is capped to keep
+ * a single request within reasonable time and memory limits.
+ *
+ * A bulk request is NOT atomic: issues are processed one by one and each one is
+ * committed on its own. If the request is interrupted (timeout, connection drop,
+ * fatal error), the issues already processed stay modified while the remaining
+ * ones are left untouched, and no rollback takes place.
+ */
+if( !defined( 'REST_BULK_MAX_ISSUES' ) ) {
+	define( 'REST_BULK_MAX_ISSUES', 100 );
+}
+
+/**
+ * Extract and validate the 'ids' array of a bulk request body.
+ *
+ * Duplicate ids are collapsed so that each issue is processed exactly once,
+ * while the order of first appearance is preserved.
+ *
+ * Only a JSON integer or a plain digit string is accepted. Anything else --
+ * floats, exponent notation ('1e2'), hex, values with whitespace or a sign,
+ * numbers beyond the integer range -- is rejected for the whole request rather
+ * than silently cast, because a cast turns a bogus id into a real, unrelated
+ * issue id ('1e2' becomes 100) and the update would hit the wrong issue.
+ *
+ * @param mixed  $p_body  The parsed request body.
+ * @param string $p_error Set to the error message when validation fails.
+ * @return array|null The list of unique issue ids, or null on error.
+ */
+function rest_issue_bulk_ids( $p_body, &$p_error ) {
+	$p_error = null;
+
+	if( !is_array( $p_body ) ) {
+		$p_error = 'Invalid request body or format';
+		return null;
+	}
+
+	if( !isset( $p_body['ids'] ) || !is_array( $p_body['ids'] ) ) {
+		$p_error = "Mandatory field 'ids' is missing or is not an array.";
+		return null;
+	}
+
+	if( count( $p_body['ids'] ) == 0 ) {
+		$p_error = "Mandatory field 'ids' must contain at least one issue id.";
+		return null;
+	}
+
+	$t_ids = array();
+	$t_index = 0;
+	foreach( $p_body['ids'] as $t_raw_id ) {
+		$t_id = rest_issue_bulk_parse_id( $t_raw_id );
+		if( $t_id === null ) {
+			$p_error = "Invalid issue id at index $t_index: "
+				. rest_issue_bulk_describe_value( $t_raw_id )
+				. '. Expected a positive integer.';
+			return null;
+		}
+
+		# Duplicates are processed once.
+		$t_ids[$t_id] = $t_id;
+		$t_index++;
+	}
+
+	$t_ids = array_values( $t_ids );
+
+	if( count( $t_ids ) > REST_BULK_MAX_ISSUES ) {
+		$p_error = 'A bulk request is limited to ' . REST_BULK_MAX_ISSUES
+			. ' issues, ' . count( $t_ids ) . ' provided.';
+		return null;
+	}
+
+	return $t_ids;
+}
+
+/**
+ * Parse a single entry of a bulk 'ids' array into a positive issue id.
+ *
+ * @param mixed $p_raw_id The raw value as it came out of the JSON body.
+ * @return integer|null The issue id, or null when the value is not a valid id.
+ */
+function rest_issue_bulk_parse_id( $p_raw_id ) {
+	if( is_int( $p_raw_id ) ) {
+		return $p_raw_id > 0 ? $p_raw_id : null;
+	}
+
+	# A digit-only string, no sign, no whitespace, no decimal point, no exponent.
+	if( is_string( $p_raw_id ) && preg_match( '/^[0-9]+$/', $p_raw_id ) ) {
+		# Reject values that don't survive the round-trip through an integer,
+		# i.e. anything above PHP_INT_MAX.
+		$t_id = (int)$p_raw_id;
+		if( $t_id > 0 && (string)$t_id === ltrim( $p_raw_id, '0' ) ) {
+			return $t_id;
+		}
+	}
+
+	return null;
+}
+
+/**
+ * Render a rejected value for an error message, without echoing back a large input.
+ *
+ * @param mixed $p_value The value to describe.
+ * @return string
+ */
+function rest_issue_bulk_describe_value( $p_value ) {
+	if( !is_scalar( $p_value ) ) {
+		return gettype( $p_value );
+	}
+
+	if( is_bool( $p_value ) ) {
+		return $p_value ? 'true' : 'false';
+	}
+
+	$t_value = (string)$p_value;
+	if( mb_strlen( $t_value ) > 32 ) {
+		$t_value = mb_substr( $t_value, 0, 32 ) . '...';
+	}
+
+	return "'" . $t_value . "'";
+}
+
+/**
+ * Determine whether notifications should be suppressed for a bulk request.
+ *
+ * @param array $p_body The parsed request body.
+ * @return boolean
+ */
+function rest_issue_bulk_suppress_notifications( array $p_body ) {
+	if( !isset( $p_body['suppress_notifications'] ) ) {
+		return false;
+	}
+
+	$t_value = $p_body['suppress_notifications'];
+	if( is_bool( $t_value ) ) {
+		return $t_value;
+	}
+
+	return in_array( strtolower( (string)$t_value ), array( '1', 'true', 'yes', 'on' ), true );
+}
+
+/**
+ * Build the per-issue error entry of a bulk response from a caught exception.
+ *
+ * @param integer   $p_issue_id  The issue id.
+ * @param Throwable $p_exception The exception raised while processing the issue.
+ * @return array
+ */
+function rest_issue_bulk_error( $p_issue_id, Throwable $p_exception ) {
+	if( $p_exception instanceof \Mantis\Exceptions\LegacyApiFaultException ) {
+		# Legacy faults already carry the http status code.
+		$t_code = (int)$p_exception->getCode();
+		$t_message = $p_exception->getMessage();
+	} else if( $p_exception instanceof \Mantis\Exceptions\MantisException ) {
+		$t_code = error_map_mantis_error_to_http_code( $p_exception->getCode() );
+		$t_message = $p_exception->getMessage();
+	} else {
+		# Anything else (TypeError, database errors, ...) carries internal detail
+		# such as SQL text or file paths, so it is logged and not sent back.
+		# Same treatment as the API's global errorHandler.
+		error_log( 'Bulk operation failed on issue ' . (int)$p_issue_id . ': '
+			. $p_exception->getMessage() . "\n" . error_stack_trace_as_string( $p_exception ) );
+
+		$t_code = HTTP_STATUS_INTERNAL_SERVER_ERROR;
+		$t_message = 'Internal error';
+	}
+
+	return array(
+		'id' => (int)$p_issue_id,
+		'status' => 'error',
+		'code' => $t_code,
+		'message' => $t_message,
+	);
+}
+
+/**
+ * Wrap the per-issue loop of a bulk operation.
+ *
+ * Applies the callback to every id, isolating failures so that one failing issue
+ * doesn't prevent the remaining ones from being processed, and optionally disables
+ * email notifications for the duration of the batch.
+ *
+ * @param array    $p_ids      The issue ids to process.
+ * @param boolean  $p_suppress Whether to suppress email notifications.
+ * @param callable $p_callback Receives an issue id, returns the 'ok' result entry.
+ * @return array The bulk result payload.
+ */
+function rest_issue_bulk_run( array $p_ids, $p_suppress, callable $p_callback ) {
+	if( $p_suppress ) {
+		# Same mechanism as project_delete(): temporarily disable all notifications.
+		$t_email_notifications = config_get( 'enable_email_notification' );
+		config_set_cache( 'enable_email_notification', OFF, CONFIG_TYPE_INT );
+	}
+
+	$t_results = array();
+	$t_ok_count = 0;
+	$t_error_count = 0;
+
+	try {
+		foreach( $p_ids as $t_id ) {
+			try {
+				$t_entry = $p_callback( $t_id );
+				$t_ok_count++;
+			} catch( Throwable $e ) {
+				$t_entry = rest_issue_bulk_error( $t_id, $e );
+				$t_error_count++;
+			}
+
+			$t_results[] = $t_entry;
+		}
+	} finally {
+		if( $p_suppress ) {
+			config_set_cache( 'enable_email_notification', $t_email_notifications, CONFIG_TYPE_INT );
+		}
+	}
+
+	return array(
+		'results' => $t_results,
+		'ok_count' => $t_ok_count,
+		'error_count' => $t_error_count,
+	);
+}
+
+/**
+ * The enum fields of an issue patch, mapped to the enum config they resolve against.
+ *
+ * These are the fields mc_issue_update() runs through mci_get_enum_id_from_objectref().
+ *
+ * @return array Map of issue field name => enum name.
+ */
+function rest_issue_bulk_enum_fields() {
+	return array(
+		'status'          => 'status',
+		'resolution'      => 'resolution',
+		'priority'        => 'priority',
+		'severity'        => 'severity',
+		'reproducibility' => 'reproducibility',
+		'projection'      => 'projection',
+		'eta'             => 'eta',
+		'view_state'      => 'view_state',
+	);
+}
+
+/**
+ * Validate the enum fields of a bulk issue patch before anything is modified.
+ *
+ * An unknown enum name isn't an error further down: mci_get_enum_id_from_objectref()
+ * falls back to the 'webservice_*_enum_default_when_not_found' config, which is 0 by
+ * default, and the issue ends up with an out-of-range value while the response still
+ * says 'ok'. In a bulk request that silently corrupts the whole batch, so the request
+ * is rejected up front instead.
+ *
+ * @param array  $p_patch The 'issue' patch of the bulk request.
+ * @param string $p_error Set to the error message when validation fails.
+ * @return boolean True when every enum field resolves to a known value.
+ */
+function rest_issue_bulk_validate_enums( array $p_patch, &$p_error ) {
+	$p_error = null;
+
+	foreach( rest_issue_bulk_enum_fields() as $t_field => $t_enum ) {
+		if( !isset( $p_patch[$t_field] ) ) {
+			continue;
+		}
+
+		$t_ref = ApiObjectFactory::objectToArray( $p_patch[$t_field] );
+
+		# An explicit id is passed straight through by the update path; only names
+		# go through the lookup that can silently fall back.
+		if( is_array( $t_ref ) && isset( $t_ref['id'] ) && (int)$t_ref['id'] != 0 ) {
+			continue;
+		}
+
+		if( !is_array( $t_ref ) || !isset( $t_ref['name'] ) || is_blank( $t_ref['name'] ) ) {
+			$p_error = "Field '$t_field' must be an object with an 'id' or a 'name'.";
+			return false;
+		}
+
+		$t_enum_string = config_get( $t_enum . '_enum_string' );
+		if( mci_get_enum_value_from_label( $t_enum_string, $t_ref['name'] ) == 0 ) {
+			$p_error = 'Unknown ' . $t_field . ' '
+				. rest_issue_bulk_describe_value( $t_ref['name'] )
+				. '. Supported values are: '
+				. implode( ', ', MantisEnum::getAssocArrayIndexedByValues( $t_enum_string ) )
+				. '.';
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Apply the same update to multiple issues.
+ *
+ * Body: { "ids": [1, 2, 3], "issue": { ...same shape as a single issue PATCH... },
+ *         "suppress_notifications": false }
+ *
+ * Each issue goes through the same update path as the single-issue PATCH, so
+ * history, events and notifications behave identically. A failure on one issue
+ * (missing, no access, conflict) doesn't stop the remaining ones; the response
+ * reports the outcome of every requested issue.
+ *
+ * @param \Slim\Http\Request  $p_request  The request.
+ * @param \Slim\Http\Response $p_response The response.
+ * @param array               $p_args     Arguments
+ *
+ * @return \Slim\Http\Response The augmented response.
+ *
+ * @noinspection PhpUnusedParameterInspection
+ */
+function rest_issue_bulk_update( \Slim\Http\Request $p_request, \Slim\Http\Response $p_response, array $p_args ) {
+	$t_body = $p_request->getParsedBody();
+
+	$t_ids = rest_issue_bulk_ids( $t_body, $t_error );
+	if( $t_ids === null ) {
+		# The reason phrase goes into the status line, so it is left generic; the
+		# detail, which embeds request data, is carried by the JSON body only.
+		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST )
+			->withJson( array( 'message' => $t_error ) );
+	}
+
+	if( !isset( $t_body['issue'] ) || !is_array( $t_body['issue'] ) || count( $t_body['issue'] ) == 0 ) {
+		$t_message = "Mandatory field 'issue' is missing or empty.";
+		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST, $t_message )
+			->withJson( array( 'message' => $t_message ) );
+	}
+
+	$t_patch = $t_body['issue'];
+	if( isset( $t_patch['id'] ) ) {
+		$t_message = "Field 'id' is not allowed in a bulk issue patch.";
+		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST, $t_message )
+			->withJson( array( 'message' => $t_message ) );
+	}
+
+	# Resolve the enum fields once, before the first issue is touched: an unknown
+	# name must fail the whole request rather than be applied to every issue.
+	if( !rest_issue_bulk_validate_enums( $t_patch, $t_enum_error ) ) {
+		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST )
+			->withJson( array( 'message' => $t_enum_error ) );
+	}
+
+	$t_result = rest_issue_bulk_run(
+		$t_ids,
+		rest_issue_bulk_suppress_notifications( $t_body ),
+		function( $p_issue_id ) use ( $t_patch ) {
+			# Same sequence as rest_issue_update(): load the issue, merge the patch
+			# on top of it and run it through mc_issue_update().
+			$t_issue = mc_issue_get( /* username */ '', /* password */ '', $p_issue_id );
+			ApiObjectFactory::throwIfFault( $t_issue );
+
+			$t_issue = (object)array_merge( $t_issue, $t_patch );
+
+			$t_update = mc_issue_update( /* username */ '', /* password */ '', $p_issue_id, $t_issue );
+			ApiObjectFactory::throwIfFault( $t_update );
+
+			return array( 'id' => (int)$p_issue_id, 'status' => 'ok' );
+		}
+	);
+
+	return $p_response->withStatus( HTTP_STATUS_SUCCESS,
+		"Bulk update: {$t_result['ok_count']} updated, {$t_result['error_count']} failed" )
+		->withJson( $t_result );
+}
+
+/**
+ * Add the same note to multiple issues.
+ *
+ * Body: { "ids": [1, 2, 3], "note": { "text": "...", "view_state": { "name": "public" } },
+ *         "suppress_notifications": false }
+ *
+ * Each note is created through IssueNoteAddCommand, the same command used by the
+ * single-issue note endpoint. A failure on one issue doesn't stop the remaining ones.
+ *
+ * @param \Slim\Http\Request  $p_request  The request.
+ * @param \Slim\Http\Response $p_response The response.
+ * @param array               $p_args     Arguments
+ *
+ * @return \Slim\Http\Response The augmented response.
+ *
+ * @noinspection PhpUnusedParameterInspection
+ */
+function rest_issue_bulk_note_add( \Slim\Http\Request $p_request, \Slim\Http\Response $p_response, array $p_args ) {
+	$t_body = $p_request->getParsedBody();
+
+	$t_ids = rest_issue_bulk_ids( $t_body, $t_error );
+	if( $t_ids === null ) {
+		# The reason phrase goes into the status line, so it is left generic; the
+		# detail, which embeds request data, is carried by the JSON body only.
+		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST )
+			->withJson( array( 'message' => $t_error ) );
+	}
+
+	if( !isset( $t_body['note'] ) || !is_array( $t_body['note'] ) || count( $t_body['note'] ) == 0 ) {
+		$t_message = "Mandatory field 'note' is missing or empty.";
+		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST, $t_message )
+			->withJson( array( 'message' => $t_message ) );
+	}
+
+	$t_note = $t_body['note'];
+	if( isset( $t_note['files'] ) ) {
+		# A base64 upload is moved to a temp file that is consumed by the first
+		# note created from it, so it can't be shared across issues.
+		$t_message = "Field 'files' is not supported for bulk notes.";
+		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST, $t_message )
+			->withJson( array( 'message' => $t_message ) );
+	}
+
+	$t_result = rest_issue_bulk_run(
+		$t_ids,
+		rest_issue_bulk_suppress_notifications( $t_body ),
+		function( $p_issue_id ) use ( $t_note ) {
+			$t_command = new IssueNoteAddCommand( array(
+				'query' => array( 'issue_id' => $p_issue_id ),
+				'payload' => $t_note,
+			) );
+			$t_command_response = $t_command->execute();
+
+			return array(
+				'id' => (int)$p_issue_id,
+				'status' => 'ok',
+				'note_id' => (int)$t_command_response['id'],
+			);
+		}
+	);
+
+	return $p_response->withStatus( HTTP_STATUS_SUCCESS,
+		"Bulk note: {$t_result['ok_count']} added, {$t_result['error_count']} failed" )
 		->withJson( $t_result );
 }
 

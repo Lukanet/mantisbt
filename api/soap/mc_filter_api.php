@@ -174,9 +174,11 @@ function mci_filter_delete( $p_filter_id ) {
  * @param integer $p_page_number Start with the given page number (zero-based).
  * @param integer $p_per_page    Number of issues to display per page.
  * @param array|null $p_fields   The list of fields to retrieve for the issues, or null for all.
+ * @param integer $p_page_count  Output parameter that receives the number of pages.
+ * @param integer $p_issue_count Output parameter that receives the total number of matching issues.
  * @return array that represents an IssueDataArray structure
  */
-function mc_filter_get_issues( $p_username, $p_password, $p_project_id, $p_filter_id, $p_page_number, $p_per_page, $p_fields = null ) {
+function mc_filter_get_issues( $p_username, $p_password, $p_project_id, $p_filter_id, $p_page_number, $p_per_page, $p_fields = null, &$p_page_count = null, &$p_issue_count = null ) {
 	$t_user_id = mci_check_login( $p_username, $p_password );
 	if( $t_user_id === false ) {
 		return mci_fault_login_failed();
@@ -220,6 +222,9 @@ function mc_filter_get_issues( $p_username, $p_password, $p_project_id, $p_filte
 		$p_project_id,
 		$t_user_id,
 		$t_show_sticky );
+
+	$p_page_count = $t_page_count;
+	$p_issue_count = $t_bug_count;
 
 	# the page number was moved back, so we have exceeded the actual page number, see bug #12991
 	if( $t_orig_page_number > $p_page_number ) {

@@ -571,6 +571,97 @@ class RestIssueTest extends RestBase {
 		$this->assertEquals( HTTP_STATUS_BAD_REQUEST, $t_response->getStatusCode() );
 	}
 
+	/**
+	 * Creates an issue whose summary contains the given unique token.
+	 *
+	 * @param string $p_token Unique token to embed in the issue summary.
+	 * @return integer The created issue id.
+	 */
+	private function createIssueWithToken( $p_token ) {
+		$t_issue_to_add = $this->getIssueToAdd();
+		$t_issue_to_add['summary'] = $p_token . ' ' . $t_issue_to_add['summary'];
+
+		$t_response = $this->builder()->post( '/issues', $t_issue_to_add )->send();
+		$this->assertEquals( HTTP_STATUS_CREATED, $t_response->getStatusCode() );
+
+		$t_body = json_decode( $t_response->getBody(), true );
+		$t_issue_id = $t_body['issue']['id'];
+		$this->deleteIssueAfterRun( $t_issue_id );
+
+		return $t_issue_id;
+	}
+
+	/**
+	 * Getting issues via an inline filter returns the total number of matching
+	 * issues and the number of pages, not just the current page.
+	 *
+	 * @return void
+	 */
+	public function testGetIssuesWithInlineFilterReturnsTotalCount() {
+		$t_token = 'totalcount-' . rand( 1, 1000000 );
+		$this->createIssueWithToken( $t_token );
+		$this->createIssueWithToken( $t_token );
+
+		$t_query = 'project_id=' . $this->getProjectId()
+			. '&search=' . urlencode( $t_token )
+			. '&page_size=1';
+		$t_response = $this->builder()->get( '/issues', $t_query )->send();
+
+		$this->assertEquals( HTTP_STATUS_SUCCESS, $t_response->getStatusCode() );
+		$t_body = json_decode( $t_response->getBody(), true );
+
+		$this->assertArrayHasKey( 'issues', $t_body, 'issues' );
+		$this->assertCount( 1, $t_body['issues'], 'issues on page' );
+
+		$this->assertArrayHasKey( 'total_count', $t_body, 'total_count' );
+		$this->assertEquals( 2, $t_body['total_count'], 'total_count' );
+
+		$this->assertArrayHasKey( 'page_count', $t_body, 'page_count' );
+		$this->assertEquals( 2, $t_body['page_count'], 'page_count' );
+	}
+
+	/**
+	 * Getting issues without a filter returns the total number of issues and
+	 * the number of pages.
+	 *
+	 * @return void
+	 */
+	public function testGetIssuesWithoutFilterReturnsTotalCount() {
+		$this->createIssueWithToken( 'totalcount-' . rand( 1, 1000000 ) );
+
+		$t_query = 'project_id=' . $this->getProjectId() . '&page_size=1';
+		$t_response = $this->builder()->get( '/issues', $t_query )->send();
+
+		$this->assertEquals( HTTP_STATUS_SUCCESS, $t_response->getStatusCode() );
+		$t_body = json_decode( $t_response->getBody(), true );
+
+		$this->assertCount( 1, $t_body['issues'], 'issues on page' );
+
+		$this->assertArrayHasKey( 'total_count', $t_body, 'total_count' );
+		$this->assertGreaterThanOrEqual( 1, $t_body['total_count'], 'total_count' );
+
+		$this->assertArrayHasKey( 'page_count', $t_body, 'page_count' );
+		$this->assertEquals( $t_body['total_count'], $t_body['page_count'], 'page_count with page_size 1' );
+	}
+
+	/**
+	 * Getting a single issue by id doesn't return the counts.
+	 *
+	 * @return void
+	 */
+	public function testGetIssueByIdDoesNotReturnCounts() {
+		$t_issue_id = $this->createIssueWithToken( 'totalcount-' . rand( 1, 1000000 ) );
+
+		$t_response = $this->builder()->get( '/issues/' . $t_issue_id )->send();
+
+		$this->assertEquals( HTTP_STATUS_SUCCESS, $t_response->getStatusCode() );
+		$t_body = json_decode( $t_response->getBody(), true );
+
+		$this->assertCount( 1, $t_body['issues'], 'issues' );
+		$this->assertArrayNotHasKey( 'total_count', $t_body, 'total_count' );
+		$this->assertArrayNotHasKey( 'page_count', $t_body, 'page_count' );
+	}
+
 	public function setUp(): void {
 		parent::setUp();
 
