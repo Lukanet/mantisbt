@@ -942,17 +942,30 @@ function rest_issue_file_add( \Slim\Http\Request $p_request, \Slim\Http\Response
 function rest_issue_note_add( \Slim\Http\Request $p_request, \Slim\Http\Response $p_response, array $p_args ) {
 	$t_issue_id = isset( $p_args['id'] ) ? $p_args['id'] : $p_request->getParam( 'id' );
 
+	$t_payload = $p_request->getParsedBody();
+
+	# The body is the note itself, so the flag is dropped before the payload
+	# reaches the command, which would reject an unknown field.
+	$t_suppress = rest_issue_suppress_requested( $p_request );
+	if( is_array( $t_payload ) ) {
+		unset( $t_payload['suppress_notifications'] );
+	}
+
 	$t_data = array(
 		'query' => array( 'issue_id' => $t_issue_id ),
-		'payload' => $p_request->getParsedBody(),
+		'payload' => $t_payload,
 	);
 
 	if( isset( $t_data['payload']['files'] ) ) {
 		$t_data['payload']['files'] = files_base64_to_temp( $t_data['payload']['files'] );
 	}
 
-	$t_command = new IssueNoteAddCommand( $t_data );
-	$t_command_response = $t_command->execute();
+	$t_command_response = rest_issue_with_notifications_suppressed( $t_suppress,
+		function() use ( $t_data ) {
+			$t_command = new IssueNoteAddCommand( $t_data );
+			return $t_command->execute();
+		}
+	);
 
 	# TODO: Move construction of response to the command and add options to allow callers to
 	# determine whether the response is needed.  This will need refactoring of APIs that construct
@@ -1102,7 +1115,12 @@ function rest_issue_update( \Slim\Http\Request $p_request, \Slim\Http\Response $
 	$t_issue = (object)array_merge( $t_issue, $t_issue_patch );
 
 	# Trigger the issue update
-	$t_result = mc_issue_update( /* username */ '', /* password */ '', $t_issue_id, $t_issue );
+	$t_result = rest_issue_with_notifications_suppressed(
+		rest_issue_suppress_requested( $p_request ),
+		function() use ( $t_issue_id, $t_issue ) {
+			return mc_issue_update( /* username */ '', /* password */ '', $t_issue_id, $t_issue );
+		}
+	);
 	ApiObjectFactory::throwIfFault( $t_result );
 
 	$t_updated_issue = mc_issue_get( /* username */ '', /* password */ '', $t_issue_id );
@@ -1191,6 +1209,110 @@ function rest_issue_bulk_ids( $p_body, &$p_error ) {
 }
 
 /**
+ * Extract the per-issue entries of a bulk note request.
+ *
+ * Two shapes are accepted. The classic one pairs 'ids' with a single shared
+ * 'note'. The second passes 'issues', a list of { id, note } pairs, so that every
+ * issue gets its own text - which is what a mass close needs: the reason an issue
+ * was closed is per issue, and a shared note throws exactly that away.
+ *
+ * @param mixed  $p_body  The parsed request body.
+ * @param string $p_error Set to the error message when validation fails.
+ * @return array|null List of array( id, note ) pairs, or null on error.
+ */
+function rest_issue_bulk_note_entries( $p_body, &$p_error ) {
+	$p_error = null;
+
+	if( !is_array( $p_body ) ) {
+		$p_error = 'Invalid request body or format';
+		return null;
+	}
+
+	# Shared note: 'ids' + 'note', validated by the same helper as every other
+	# bulk endpoint.
+	if( !isset( $p_body['issues'] ) ) {
+		$t_ids = rest_issue_bulk_ids( $p_body, $p_error );
+		if( $t_ids === null ) {
+			return null;
+		}
+
+		if( !isset( $p_body['note'] ) || !is_array( $p_body['note'] ) || count( $p_body['note'] ) == 0 ) {
+			$p_error = "Mandatory field 'note' is missing or empty.";
+			return null;
+		}
+
+		if( isset( $p_body['note']['files'] ) ) {
+			$p_error = "Field 'files' is not supported for bulk notes.";
+			return null;
+		}
+
+		$t_entries = array();
+		foreach( $t_ids as $t_id ) {
+			$t_entries[] = array( $t_id, $p_body['note'] );
+		}
+
+		return $t_entries;
+	}
+
+	if( isset( $p_body['ids'] ) || isset( $p_body['note'] ) ) {
+		$p_error = "Field 'issues' cannot be combined with 'ids' or 'note'.";
+		return null;
+	}
+
+	if( !is_array( $p_body['issues'] ) || count( $p_body['issues'] ) == 0 ) {
+		$p_error = "Field 'issues' must be a non-empty array.";
+		return null;
+	}
+
+	$t_entries = array();
+	$t_seen = array();
+	$t_index = 0;
+	foreach( $p_body['issues'] as $t_entry ) {
+		if( !is_array( $t_entry ) || !isset( $t_entry['id'] ) ) {
+			$p_error = "Entry at index $t_index must be an object with an 'id'.";
+			return null;
+		}
+
+		$t_id = rest_issue_bulk_parse_id( $t_entry['id'] );
+		if( $t_id === null ) {
+			$p_error = "Invalid issue id at index $t_index: "
+				. rest_issue_bulk_describe_value( $t_entry['id'] )
+				. '. Expected a positive integer.';
+			return null;
+		}
+
+		if( !isset( $t_entry['note'] ) || !is_array( $t_entry['note'] ) || count( $t_entry['note'] ) == 0 ) {
+			$p_error = "Entry at index $t_index (issue $t_id) is missing a non-empty 'note'.";
+			return null;
+		}
+
+		if( isset( $t_entry['note']['files'] ) ) {
+			$p_error = "Field 'files' is not supported for bulk notes (issue $t_id).";
+			return null;
+		}
+
+		# Unlike 'ids', a repeated id here is a mistake worth reporting: the two
+		# entries carry different texts and silently dropping one loses a note.
+		if( isset( $t_seen[$t_id] ) ) {
+			$p_error = "Issue $t_id appears more than once in 'issues'.";
+			return null;
+		}
+
+		$t_seen[$t_id] = true;
+		$t_entries[] = array( $t_id, $t_entry['note'] );
+		$t_index++;
+	}
+
+	if( count( $t_entries ) > REST_BULK_MAX_ISSUES ) {
+		$p_error = 'A bulk request is limited to ' . REST_BULK_MAX_ISSUES
+			. ' issues, ' . count( $t_entries ) . ' provided.';
+		return null;
+	}
+
+	return $t_entries;
+}
+
+/**
  * Parse a single entry of a bulk 'ids' array into a positive issue id.
  *
  * @param mixed $p_raw_id The raw value as it came out of the JSON body.
@@ -1257,6 +1379,160 @@ function rest_issue_bulk_suppress_notifications( array $p_body ) {
 }
 
 /**
+ * Interpret a truthy flag as it arrives from JSON or from a query string.
+ *
+ * @param mixed $p_value The raw value.
+ * @return boolean
+ */
+function rest_issue_flag_is_set( $p_value ) {
+	if( is_bool( $p_value ) ) {
+		return $p_value;
+	}
+
+	return in_array( strtolower( (string)$p_value ), array( '1', 'true', 'yes', 'on' ), true );
+}
+
+/**
+ * Determine whether notifications should be suppressed for a single-issue request.
+ *
+ * The flag is read from the query string first, because on the note endpoint the
+ * request body IS the note payload and must not carry unrelated fields.
+ *
+ * @param \Slim\Http\Request $p_request The request.
+ * @return boolean
+ */
+function rest_issue_suppress_requested( \Slim\Http\Request $p_request ) {
+	$t_param = $p_request->getQueryParam( 'suppress_notifications' );
+	if( $t_param !== null ) {
+		return rest_issue_flag_is_set( $t_param );
+	}
+
+	$t_body = $p_request->getParsedBody();
+	if( is_array( $t_body ) && isset( $t_body['suppress_notifications'] ) ) {
+		return rest_issue_flag_is_set( $t_body['suppress_notifications'] );
+	}
+
+	return false;
+}
+
+/**
+ * Run a callback with e-mail notifications turned off.
+ *
+ * The switch is the global notification config, the same mechanism used by
+ * project_delete(), so it silences EVERY notification raised while the callback
+ * runs - not only those of the issues being processed. That is harmless within
+ * one request, which touches only what the caller asked for, but it does mean
+ * the flag must never be left set: the restore runs from a finally block so a
+ * fatal error in the callback cannot leak a silenced instance.
+ *
+ * @param boolean  $p_suppress Whether to suppress.
+ * @param callable $p_callback The work to run.
+ * @return mixed The callback's return value.
+ */
+function rest_issue_with_notifications_suppressed( $p_suppress, callable $p_callback ) {
+	if( !$p_suppress ) {
+		return $p_callback();
+	}
+
+	$t_saved = config_get( 'enable_email_notification' );
+	config_set_cache( 'enable_email_notification', OFF, CONFIG_TYPE_INT );
+
+	try {
+		return $p_callback();
+	} finally {
+		config_set_cache( 'enable_email_notification', $t_saved, CONFIG_TYPE_INT );
+	}
+}
+
+/**
+ * Determine whether a bulk request is a dry run.
+ *
+ * @param array $p_body The parsed request body.
+ * @return boolean
+ */
+function rest_issue_bulk_dry_run( array $p_body ) {
+	return isset( $p_body['dry_run'] ) && rest_issue_flag_is_set( $p_body['dry_run'] );
+}
+
+/**
+ * Build the response of a dry run: everything the request resolved to, nothing applied.
+ *
+ * The point is to answer "what exactly would this do" before it does it, so the
+ * ids are echoed in full - a count alone hides the one wrong id that matters.
+ *
+ * @param array $p_ids    The issue ids the request resolved to.
+ * @param array $p_body   The parsed request body.
+ * @param array $p_detail Endpoint-specific preview of the payload.
+ * @return array
+ */
+function rest_issue_bulk_dry_run_result( array $p_ids, array $p_body, array $p_detail ) {
+	return array_merge( array(
+		'dry_run' => true,
+		'issue_count' => count( $p_ids ),
+		'ids' => $p_ids,
+		'suppress_notifications' => rest_issue_bulk_suppress_notifications( $p_body ),
+		'tag' => isset( $p_body['tag'] ) ? $p_body['tag'] : null,
+	), $p_detail );
+}
+
+/**
+ * Resolve the 'tag' field of a bulk request into a tag id, creating the tag when needed.
+ *
+ * A mass operation is only as safe as its undo. Stamping every issue it touched
+ * with one tag turns "revert yesterday's sweep" into a filter, instead of a hunt
+ * through note texts.
+ *
+ * @param array  $p_body  The parsed request body.
+ * @param string $p_error Set to the error message when the tag cannot be resolved.
+ * @return integer The tag id, or 0 when no tag was requested, or -1 on error.
+ */
+function rest_issue_bulk_tag_id( array $p_body, &$p_error ) {
+	$p_error = null;
+
+	if( !isset( $p_body['tag'] ) ) {
+		return 0;
+	}
+
+	$t_name = $p_body['tag'];
+	if( !is_string( $t_name ) || trim( $t_name ) === '' ) {
+		$p_error = "Field 'tag' must be a non-empty string.";
+		return -1;
+	}
+
+	$t_name = trim( $t_name );
+	$t_matches = array();
+	if( !tag_name_is_valid( $t_name, $t_matches ) ) {
+		$p_error = "Invalid tag name '$t_name'.";
+		return -1;
+	}
+
+	$t_tag = tag_get_by_name( $t_name );
+	if( $t_tag !== false ) {
+		return (int)$t_tag['id'];
+	}
+
+	if( !access_has_global_level( config_get( 'tag_create_threshold' ) ) ) {
+		$p_error = "Tag '$t_name' does not exist and you may not create it.";
+		return -1;
+	}
+
+	return (int)tag_create( $t_name );
+}
+
+/**
+ * Attach the bulk tag to one issue, ignoring an attachment that is already there.
+ *
+ * @param integer $p_tag_id  The tag id, 0 when no tag was requested.
+ * @param integer $p_issue_id The issue id.
+ * @return void
+ */
+function rest_issue_bulk_tag_attach( $p_tag_id, $p_issue_id ) {
+	if( $p_tag_id > 0 && !tag_bug_is_attached( $p_tag_id, $p_issue_id ) ) {
+		tag_bug_attach( $p_tag_id, $p_issue_id );
+	}
+}
+
+/**
  * Build the per-issue error entry of a bulk response from a caught exception.
  *
  * @param integer   $p_issue_id  The issue id.
@@ -1303,17 +1579,11 @@ function rest_issue_bulk_error( $p_issue_id, Throwable $p_exception ) {
  * @return array The bulk result payload.
  */
 function rest_issue_bulk_run( array $p_ids, $p_suppress, callable $p_callback ) {
-	if( $p_suppress ) {
-		# Same mechanism as project_delete(): temporarily disable all notifications.
-		$t_email_notifications = config_get( 'enable_email_notification' );
-		config_set_cache( 'enable_email_notification', OFF, CONFIG_TYPE_INT );
-	}
+	return rest_issue_with_notifications_suppressed( $p_suppress, function() use ( $p_ids, $p_callback ) {
+		$t_results = array();
+		$t_ok_count = 0;
+		$t_error_count = 0;
 
-	$t_results = array();
-	$t_ok_count = 0;
-	$t_error_count = 0;
-
-	try {
 		foreach( $p_ids as $t_id ) {
 			try {
 				$t_entry = $p_callback( $t_id );
@@ -1325,17 +1595,13 @@ function rest_issue_bulk_run( array $p_ids, $p_suppress, callable $p_callback ) 
 
 			$t_results[] = $t_entry;
 		}
-	} finally {
-		if( $p_suppress ) {
-			config_set_cache( 'enable_email_notification', $t_email_notifications, CONFIG_TYPE_INT );
-		}
-	}
 
-	return array(
-		'results' => $t_results,
-		'ok_count' => $t_ok_count,
-		'error_count' => $t_error_count,
-	);
+		return array(
+			'results' => $t_results,
+			'ok_count' => $t_ok_count,
+			'error_count' => $t_error_count,
+		);
+	} );
 }
 
 /**
@@ -1456,10 +1722,23 @@ function rest_issue_bulk_update( \Slim\Http\Request $p_request, \Slim\Http\Respo
 			->withJson( array( 'message' => $t_enum_error ) );
 	}
 
+	$t_tag_id = rest_issue_bulk_tag_id( $t_body, $t_tag_error );
+	if( $t_tag_id < 0 ) {
+		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST )
+			->withJson( array( 'message' => $t_tag_error ) );
+	}
+
+	if( rest_issue_bulk_dry_run( $t_body ) ) {
+		return $p_response->withStatus( HTTP_STATUS_SUCCESS, 'Bulk update: dry run' )
+			->withJson( rest_issue_bulk_dry_run_result( $t_ids, $t_body, array(
+				'patch' => $t_patch,
+			) ) );
+	}
+
 	$t_result = rest_issue_bulk_run(
 		$t_ids,
 		rest_issue_bulk_suppress_notifications( $t_body ),
-		function( $p_issue_id ) use ( $t_patch ) {
+		function( $p_issue_id ) use ( $t_patch, $t_tag_id ) {
 			# Same sequence as rest_issue_update(): load the issue, merge the patch
 			# on top of it and run it through mc_issue_update().
 			$t_issue = mc_issue_get( /* username */ '', /* password */ '', $p_issue_id );
@@ -1469,6 +1748,8 @@ function rest_issue_bulk_update( \Slim\Http\Request $p_request, \Slim\Http\Respo
 
 			$t_update = mc_issue_update( /* username */ '', /* password */ '', $p_issue_id, $t_issue );
 			ApiObjectFactory::throwIfFault( $t_update );
+
+			rest_issue_bulk_tag_attach( $t_tag_id, $p_issue_id );
 
 			return array( 'id' => (int)$p_issue_id, 'status' => 'ok' );
 		}
@@ -1482,8 +1763,14 @@ function rest_issue_bulk_update( \Slim\Http\Request $p_request, \Slim\Http\Respo
 /**
  * Add the same note to multiple issues.
  *
- * Body: { "ids": [1, 2, 3], "note": { "text": "...", "view_state": { "name": "public" } },
- *         "suppress_notifications": false }
+ * Body, one note for everyone:
+ *   { "ids": [1, 2, 3], "note": { "text": "...", "view_state": { "name": "public" } },
+ *     "suppress_notifications": true, "tag": "auto-close-2026-09-18", "dry_run": false }
+ *
+ * Body, a note per issue:
+ *   { "issues": [ { "id": 1, "note": { "text": "..." } },
+ *                 { "id": 2, "note": { "text": "..." } } ],
+ *     "suppress_notifications": true, "tag": "auto-close-2026-09-18" }
  *
  * Each note is created through IssueNoteAddCommand, the same command used by the
  * single-issue note endpoint. A failure on one issue doesn't stop the remaining ones.
@@ -1499,38 +1786,56 @@ function rest_issue_bulk_update( \Slim\Http\Request $p_request, \Slim\Http\Respo
 function rest_issue_bulk_note_add( \Slim\Http\Request $p_request, \Slim\Http\Response $p_response, array $p_args ) {
 	$t_body = $p_request->getParsedBody();
 
-	$t_ids = rest_issue_bulk_ids( $t_body, $t_error );
-	if( $t_ids === null ) {
+	# Accepts either 'ids' + a shared 'note', or 'issues' with a note per issue.
+	# A base64 upload is moved to a temp file that is consumed by the first note
+	# created from it, so 'files' is rejected in both shapes.
+	$t_entries = rest_issue_bulk_note_entries( $t_body, $t_error );
+	if( $t_entries === null ) {
 		# The reason phrase goes into the status line, so it is left generic; the
 		# detail, which embeds request data, is carried by the JSON body only.
 		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST )
 			->withJson( array( 'message' => $t_error ) );
 	}
 
-	if( !isset( $t_body['note'] ) || !is_array( $t_body['note'] ) || count( $t_body['note'] ) == 0 ) {
-		$t_message = "Mandatory field 'note' is missing or empty.";
-		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST, $t_message )
-			->withJson( array( 'message' => $t_message ) );
+	$t_tag_id = rest_issue_bulk_tag_id( $t_body, $t_tag_error );
+	if( $t_tag_id < 0 ) {
+		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST )
+			->withJson( array( 'message' => $t_tag_error ) );
 	}
 
-	$t_note = $t_body['note'];
-	if( isset( $t_note['files'] ) ) {
-		# A base64 upload is moved to a temp file that is consumed by the first
-		# note created from it, so it can't be shared across issues.
-		$t_message = "Field 'files' is not supported for bulk notes.";
-		return $p_response->withStatus( HTTP_STATUS_BAD_REQUEST, $t_message )
-			->withJson( array( 'message' => $t_message ) );
+	$t_ids = array_column( $t_entries, 0 );
+
+	if( rest_issue_bulk_dry_run( $t_body ) ) {
+		$t_preview = array();
+		foreach( $t_entries as $t_entry ) {
+			$t_preview[] = array(
+				'id' => $t_entry[0],
+				'text_length' => mb_strlen( isset( $t_entry[1]['text'] ) ? (string)$t_entry[1]['text'] : '' ),
+			);
+		}
+
+		return $p_response->withStatus( HTTP_STATUS_SUCCESS, 'Bulk note: dry run' )
+			->withJson( rest_issue_bulk_dry_run_result( $t_ids, $t_body, array(
+				'notes' => $t_preview,
+			) ) );
+	}
+
+	$t_notes_by_id = array();
+	foreach( $t_entries as $t_entry ) {
+		$t_notes_by_id[$t_entry[0]] = $t_entry[1];
 	}
 
 	$t_result = rest_issue_bulk_run(
 		$t_ids,
 		rest_issue_bulk_suppress_notifications( $t_body ),
-		function( $p_issue_id ) use ( $t_note ) {
+		function( $p_issue_id ) use ( $t_notes_by_id, $t_tag_id ) {
 			$t_command = new IssueNoteAddCommand( array(
 				'query' => array( 'issue_id' => $p_issue_id ),
-				'payload' => $t_note,
+				'payload' => $t_notes_by_id[$p_issue_id],
 			) );
 			$t_command_response = $t_command->execute();
+
+			rest_issue_bulk_tag_attach( $t_tag_id, $p_issue_id );
 
 			return array(
 				'id' => (int)$p_issue_id,
