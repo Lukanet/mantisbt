@@ -181,10 +181,19 @@ abstract class RestBase extends MantisTestCase {
 
 	/**
 	 * Gets the default category used for testing.
+	 *
+	 * 'General' unless overridden by $GLOBALS['MANTIS_TESTSUITE_CATEGORY'] in the
+	 * bootstrap file or by the MANTIS_TESTSUITE_CATEGORY environment variable, for
+	 * installations where the test project has no 'General' category.
+	 *
 	 * @return string
 	 */
 	protected function getCategory() {
-		return 'General';
+		if( !empty( $GLOBALS['MANTIS_TESTSUITE_CATEGORY'] ) ) {
+			return $GLOBALS['MANTIS_TESTSUITE_CATEGORY'];
+		}
+		$t_category = getenv( 'MANTIS_TESTSUITE_CATEGORY' );
+		return $t_category === false || $t_category === '' ? 'General' : $t_category;
 	}
 
 	/**

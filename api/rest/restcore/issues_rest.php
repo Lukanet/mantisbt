@@ -232,10 +232,25 @@ function rest_issue_known_query_params() {
 	return array_merge(
 		array( 'id', 'project_id', 'filter_id', 'select', 'page', 'page_size',
 			'count_only', 'fields' ),
+		rest_issue_extended_query_params(),
 		array_keys( rest_issue_filter_param_map() ),
 		array_keys( rest_issue_date_submitted_param_map() ),
 		array_keys( rest_issue_date_updated_param_map() ),
 		array_keys( rest_issue_iso_date_param_map() )
+	);
+}
+
+/**
+ * The query parameters added on top of the original inline filter parameters.
+ *
+ * @return array The parameter names.
+ */
+function rest_issue_extended_query_params() {
+	return array(
+		'include_subprojects', 'offset', 'limit', 'notes_limit', 'notes_order',
+		'custom_fields', 'custom_fields_contains',
+		'status_changed_to', 'status_changed_after', 'status_changed_before',
+		'search_engine',
 	);
 }
 
@@ -426,16 +441,17 @@ function rest_issue_resolve_filter( $p_inline_filter, $p_filter_id, $p_project_i
  * @param integer $p_project_id The project id.
  * @param integer $p_user_id    The user id.
  * @param integer $p_query_type One of the BugFilterQuery::QUERY_TYPE_* constants.
+ * @param array   $p_options    Additional BugFilterQuery options (see its constructor).
  *
  * @return BugFilterQuery
  */
-function rest_issue_filter_query( array $p_filter, $p_project_id, $p_user_id, $p_query_type ) {
-	return new BugFilterQuery( $p_filter, array(
+function rest_issue_filter_query( array $p_filter, $p_project_id, $p_user_id, $p_query_type, array $p_options = array() ) {
+	return new BugFilterQuery( $p_filter, array_merge( $p_options, array(
 		'query_type' => $p_query_type,
 		'project_id' => $p_project_id,
 		'user_id'    => $p_user_id,
 		'use_sticky' => false,
-	) );
+	) ) );
 }
 
 /**
@@ -462,6 +478,580 @@ function rest_issue_pagination( array $p_filter, $p_bug_count, $p_page_size ) {
 		'page_count' => filter_page_count( $p_bug_count, $t_per_page ),
 		'per_page'   => $t_per_page,
 	);
+}
+
+/**
+ * Aliases accepted by the 'sort' query parameter, mapped to the filter's column names.
+ * They follow the field names used in the issue representation.
+ *
+ * @return array
+ */
+function rest_issue_sort_aliases() {
+	return array(
+		'created_at' => 'date_submitted',
+		'updated_at' => 'last_updated',
+		'project'    => 'project_id',
+		'category'   => 'category_id',
+		'handler'    => 'handler_id',
+		'reporter'   => 'reporter_id',
+		'version'    => 'version',
+	);
+}
+
+/**
+ * The columns that the 'sort' query parameter accepts: all the enabled, sortable
+ * issue columns (standard, custom field 'custom_<name>' and plugin ones), whether or
+ * not the user shows them on the View Issues page.
+ *
+ * @return array Column names.
+ */
+function rest_issue_sortable_columns() {
+	$t_columns = array();
+	foreach( columns_get_all_active_columns() as $t_column ) {
+		if( in_array( $t_column, array( 'selection', 'edit', 'overdue', 'bug_text_id' ), true ) ) {
+			continue;
+		}
+		if( column_is_sortable( $t_column ) ) {
+			$t_columns[] = $t_column;
+		}
+	}
+	return $t_columns;
+}
+
+/**
+ * Parse and validate the 'sort' and 'sort_direction' query parameters.
+ *
+ * Both are comma-separated lists; directions pair up with the columns by position,
+ * and a column without a direction takes the last direction given (DESC if none).
+ *
+ * @param string|null $p_sort      The raw 'sort' parameter.
+ * @param string|null $p_direction The raw 'sort_direction' parameter.
+ * @param array       $p_warnings  Warnings, appended to.
+ *
+ * @return array Array with the comma-separated 'sort' and 'direction' strings,
+ *               entries are null when the parameter was not given.
+ *
+ * @throws \Mantis\Exceptions\LegacyApiFaultException On an unknown column or direction.
+ */
+function rest_issue_parse_sort( $p_sort, $p_direction, array &$p_warnings ) {
+	$t_split = function( $p_value ) {
+		if( is_array( $p_value ) ) {
+			$p_value = implode( ',', $p_value );
+		}
+		return array_values( array_filter( array_map( 'trim', explode( ',', (string)$p_value ) ), 'strlen' ) );
+	};
+
+	$t_directions = array();
+	if( $p_direction !== null ) {
+		foreach( $t_split( $p_direction ) as $t_direction ) {
+			$t_upper = strtoupper( $t_direction );
+			if( $t_upper !== 'ASC' && $t_upper !== 'DESC' ) {
+				ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+					"Invalid value '$t_direction' in 'sort_direction', expected ASC or DESC." ) );
+			}
+			$t_directions[] = $t_upper;
+		}
+	}
+
+	if( $p_sort === null ) {
+		return array( 'sort' => null, 'direction' => empty( $t_directions ) ? null : $t_directions[0] );
+	}
+
+	$t_allowed = rest_issue_sortable_columns();
+	$t_aliases = rest_issue_sort_aliases();
+	$t_columns = array();
+	$t_column_directions = array();
+	$t_last_direction = 'DESC';
+	foreach( $t_split( $p_sort ) as $t_ix => $t_requested ) {
+		$t_column = isset( $t_aliases[$t_requested] ) ? $t_aliases[$t_requested] : $t_requested;
+		if( !in_array( $t_column, $t_allowed, true ) ) {
+			ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+				"Unknown sort column '$t_requested'. Supported columns are: " . implode( ', ', $t_allowed )
+				. '; aliases: ' . implode( ', ', array_keys( $t_aliases ) ) . '.' ) );
+		}
+
+		if( isset( $t_directions[$t_ix] ) ) {
+			$t_last_direction = $t_directions[$t_ix];
+		}
+
+		if( in_array( $t_column, $t_columns, true ) ) {
+			$p_warnings[] = "Sort column '$t_requested' was given more than once, only its first occurrence is used.";
+			continue;
+		}
+
+		$t_columns[] = $t_column;
+		$t_column_directions[] = $t_last_direction;
+	}
+
+	if( empty( $t_columns ) ) {
+		return array( 'sort' => null, 'direction' => empty( $t_directions ) ? null : $t_directions[0] );
+	}
+
+	if( count( $t_directions ) > count( $t_split( $p_sort ) ) ) {
+		$p_warnings[] = "Query parameter 'sort_direction' has more values than 'sort', the extra ones were ignored.";
+	}
+
+	return array( 'sort' => implode( ',', $t_columns ), 'direction' => implode( ',', $t_column_directions ) );
+}
+
+/**
+ * Parse the 'project_id' (one id or a comma-separated list) and 'include_subprojects'
+ * query parameters into the list of projects to search.
+ *
+ * Every listed project must exist and be accessible, otherwise the request is
+ * answered with 404, like for a single project.
+ *
+ * @param mixed   $p_project_param        The raw 'project_id' parameter.
+ * @param boolean $p_include_subprojects  Whether to add the accessible sub-projects.
+ * @param integer $p_user_id              The user id.
+ * @param integer $p_missing_project      Set to the first missing / inaccessible project id.
+ *
+ * @return array List of project ids; array( ALL_PROJECTS ) for all projects.
+ */
+function rest_issue_parse_projects( $p_project_param, $p_include_subprojects, $p_user_id, &$p_missing_project ) {
+	$p_missing_project = null;
+
+	if( $p_project_param === null ) {
+		return array( ALL_PROJECTS );
+	}
+
+	$t_ids = array();
+	foreach( explode( ',', is_array( $p_project_param ) ? implode( ',', $p_project_param ) : (string)$p_project_param ) as $t_raw ) {
+		if( trim( $t_raw ) === '' ) {
+			continue;
+		}
+		$t_ids[] = (int)$t_raw;
+	}
+
+	if( empty( $t_ids ) || in_array( ALL_PROJECTS, $t_ids, true ) ) {
+		return array( ALL_PROJECTS );
+	}
+
+	$t_ids = array_values( array_unique( $t_ids ) );
+	foreach( $t_ids as $t_id ) {
+		if( !project_exists( $t_id ) || !access_has_project_level( VIEWER, $t_id, $p_user_id ) ) {
+			$p_missing_project = $t_id;
+			return array();
+		}
+	}
+
+	if( $p_include_subprojects ) {
+		foreach( $t_ids as $t_id ) {
+			$t_ids = array_merge( $t_ids, user_get_all_accessible_subprojects( $p_user_id, $t_id ) );
+		}
+		$t_ids = array_values( array_unique( array_map( 'intval', $t_ids ) ) );
+	}
+
+	return $t_ids;
+}
+
+/**
+ * Parse a date or date and time query parameter in ISO 8601 format.
+ *
+ * Accepted: 'YYYY-MM-DD', and 'YYYY-MM-DDTHH:MM[:SS]' optionally followed by 'Z' or
+ * an offset ('+02:00'); a space may replace the 'T'. Without an offset the time is
+ * in the user's time zone, like the date-only form.
+ *
+ * @param string  $p_param_name The name of the query parameter.
+ * @param string  $p_value      The value.
+ * @param boolean $p_upper      Whether this is an upper bound (a bare date then means its last second).
+ *
+ * @return array Array with 'year', 'month', 'day', 'has_time' and 'timestamp' entries.
+ *
+ * @throws \Mantis\Exceptions\LegacyApiFaultException If the value is not valid.
+ */
+function rest_issue_parse_iso_datetime( $p_param_name, $p_value, $p_upper ) {
+	$t_value = trim( (string)$p_value );
+	$t_matches = array();
+	if( preg_match( '/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:?\d{2})?)?$/', $t_value, $t_matches )
+		&& checkdate( (int)$t_matches[2], (int)$t_matches[3], (int)$t_matches[1] ) ) {
+		$t_has_time = isset( $t_matches[4] ) && $t_matches[4] !== '';
+		if( !$t_has_time ) {
+			$t_timestamp = strtotime( $t_matches[1] . '-' . $t_matches[2] . '-' . $t_matches[3]
+				. ( $p_upper ? ' 23:59:59' : ' 00:00:00' ) );
+		} else if( (int)$t_matches[4] <= 23 && (int)$t_matches[5] <= 59
+			&& ( !isset( $t_matches[6] ) || $t_matches[6] === '' || (int)$t_matches[6] <= 59 ) ) {
+			$t_timestamp = strtotime( str_replace( ' ', 'T', $t_value ) );
+		} else {
+			$t_timestamp = false;
+		}
+
+		if( $t_timestamp !== false ) {
+			return array(
+				'year'      => (int)$t_matches[1],
+				'month'     => (int)$t_matches[2],
+				'day'       => (int)$t_matches[3],
+				'has_time'  => $t_has_time,
+				'timestamp' => $t_timestamp,
+			);
+		}
+	}
+
+	ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+		"Invalid value '$p_value' for query parameter '$p_param_name', expected format 'YYYY-MM-DD'"
+		. " or 'YYYY-MM-DDTHH:MM[:SS][Z|+HH:MM]'." ) );
+}
+
+/**
+ * Check the tags of the 'tag_string' and 'tag_select' parameters.
+ *
+ * The filter core silently drops unknown tags, which turns a filter on a tag that
+ * doesn't exist into no filter at all. This finds out whether the requested tag
+ * criteria can match anything, and warns about the tags that were dropped.
+ *
+ * @param string|null $p_tag_string The raw 'tag_string' parameter.
+ * @param mixed       $p_tag_select The raw 'tag_select' parameter.
+ * @param array       $p_warnings   Warnings, appended to.
+ *
+ * @return boolean False if no issue can match the tag criteria.
+ */
+function rest_issue_check_tags( $p_tag_string, $p_tag_select, array &$p_warnings ) {
+	$t_known_any = 0;
+	$t_known_always = 0;
+	$t_unknown_any = array();
+	$t_unknown_always = array();
+
+	if( $p_tag_string !== null && !is_blank( (string)$p_tag_string ) ) {
+		foreach( explode( config_get( 'tag_separator' ), (string)$p_tag_string ) as $t_name ) {
+			$t_name = trim( $t_name );
+			if( $t_name === '' ) {
+				continue;
+			}
+			$t_prefix = mb_substr( $t_name, 0, 1 );
+			$t_bare = ( $t_prefix == '+' || $t_prefix == '-' ) ? trim( mb_substr( $t_name, 1 ) ) : $t_name;
+			$t_exists = $t_bare !== '' && tag_get_by_name( $t_bare ) !== false;
+
+			if( $t_prefix == '-' ) {
+				if( !$t_exists ) {
+					$p_warnings[] = "Tag '$t_bare' does not exist, its exclusion '-$t_bare' has no effect.";
+				}
+			} else if( $t_prefix == '+' ) {
+				$t_exists ? $t_known_always++ : $t_unknown_always[] = $t_bare;
+			} else {
+				$t_exists ? $t_known_any++ : $t_unknown_any[] = $t_bare;
+			}
+		}
+	}
+
+	if( $p_tag_select !== null && (int)$p_tag_select > 0 ) {
+		if( tag_exists( (int)$p_tag_select ) ) {
+			$t_known_any++;
+		} else {
+			$t_unknown_any[] = '#' . (int)$p_tag_select;
+		}
+	}
+
+	foreach( $t_unknown_always as $t_name ) {
+		$p_warnings[] = "Tag '$t_name' does not exist, so no issue can have it: the result is empty.";
+	}
+	if( !empty( $t_unknown_always ) ) {
+		return false;
+	}
+
+	if( !empty( $t_unknown_any ) ) {
+		if( $t_known_any == 0 && $t_known_always == 0 ) {
+			$p_warnings[] = 'Tag(s) ' . implode( ', ', $t_unknown_any )
+				. ' do not exist, so no issue can have them: the result is empty.';
+			return false;
+		}
+		$p_warnings[] = 'Tag(s) ' . implode( ', ', $t_unknown_any ) . ' do not exist and were ignored.';
+	}
+
+	return true;
+}
+
+/**
+ * Parse the custom field criteria: 'custom_fields[<name or id>]=<value>' (exact match)
+ * and 'custom_fields_contains[<name or id>]=<text>' (substring match). Several values
+ * for one field are given as 'custom_fields[<field>][]=<value>' and are ORed.
+ * The exact value '[none]' matches issues where the field is empty.
+ *
+ * @param \Slim\Http\Request $p_request  The request.
+ * @param array              $p_warnings Warnings, appended to.
+ *
+ * @return array Criteria for the BugFilterQuery 'custom_field_criteria' option.
+ *
+ * @throws \Mantis\Exceptions\LegacyApiFaultException On a malformed parameter or unknown field.
+ */
+function rest_issue_parse_custom_fields( \Slim\Http\Request $p_request, array &$p_warnings ) {
+	$t_criteria = array();
+	foreach( array( 'custom_fields' => 'exact', 'custom_fields_contains' => 'contains' ) as $t_param => $t_mode ) {
+		$t_value = $p_request->getQueryParam( $t_param, null );
+		if( $t_value === null ) {
+			continue;
+		}
+		if( !is_array( $t_value ) ) {
+			ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+				"Query parameter '$t_param' must name the field: '{$t_param}[<field name or id>]=<value>'." ) );
+		}
+
+		foreach( $t_value as $t_field => $t_values ) {
+			$t_field = trim( (string)$t_field );
+			if( ctype_digit( $t_field ) && custom_field_exists( (int)$t_field ) ) {
+				$t_field_id = (int)$t_field;
+			} else {
+				$t_field_id = custom_field_get_id_from_name( $t_field );
+			}
+			if( !$t_field_id ) {
+				ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+					"Unknown custom field '$t_field' in '$t_param'." ) );
+			}
+
+			$t_values = array_values( array_filter( array_map( 'trim', array_map( 'strval', (array)$t_values ) ), 'strlen' ) );
+			if( empty( $t_values ) ) {
+				$p_warnings[] = "Query parameter '{$t_param}[$t_field]' has no value and was ignored.";
+				continue;
+			}
+
+			$t_criteria[] = array( 'field_id' => $t_field_id, 'mode' => $t_mode, 'values' => $t_values );
+		}
+	}
+
+	return $t_criteria;
+}
+
+/**
+ * Parse an optional non-negative integer query parameter.
+ *
+ * @param \Slim\Http\Request $p_request The request.
+ * @param string             $p_name    The parameter name.
+ * @param integer            $p_min     The minimum value accepted.
+ *
+ * @return integer|null The value, or null when not given.
+ *
+ * @throws \Mantis\Exceptions\LegacyApiFaultException If the value is not an integer >= $p_min.
+ */
+function rest_issue_int_param( \Slim\Http\Request $p_request, $p_name, $p_min = 0 ) {
+	$t_value = $p_request->getQueryParam( $p_name, null );
+	if( $t_value === null ) {
+		return null;
+	}
+	if( !is_string( $t_value ) || !preg_match( '/^\d+$/', trim( $t_value ) ) || (int)$t_value < $p_min ) {
+		ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+			"Invalid value for query parameter '$p_name', expected an integer >= $p_min." ) );
+	}
+	return (int)$t_value;
+}
+
+/**
+ * Trim the notes of an issue to the requested number and order.
+ *
+ * @param array        $p_issue       The issue, as returned by mci_issue_data_as_array().
+ * @param integer|null $p_notes_limit Keep only the newest N notes; null keeps all.
+ * @param string       $p_notes_order 'asc' (oldest first, the default) or 'desc'.
+ *
+ * @return array The issue.
+ */
+function rest_issue_trim_notes( array $p_issue, $p_notes_limit, $p_notes_order ) {
+	if( !isset( $p_issue['notes'] ) || !is_array( $p_issue['notes'] ) ) {
+		return $p_issue;
+	}
+
+	$t_notes = $p_issue['notes'];
+	if( $p_notes_limit !== null ) {
+		$p_issue['notes_count'] = count( $t_notes );
+		$t_notes = $p_notes_limit == 0 ? array() : array_slice( $t_notes, -$p_notes_limit );
+	}
+	if( $p_notes_order == 'desc' ) {
+		$t_notes = array_reverse( $t_notes );
+	}
+	$p_issue['notes'] = array_values( $t_notes );
+
+	return $p_issue;
+}
+
+/**
+ * Run the full-text search provider configured in 'rest_issue_search_provider'.
+ *
+ * The provider is a callable taking the search string and returning an array with
+ * 'ids' (the matching issue ids, before any access check), 'engine' (a name) and
+ * optionally 'truncated' (true if more issues matched than were returned). It throws
+ * an exception with code 400 for an invalid expression, any other code if the
+ * backend is unavailable.
+ *
+ * The ids only narrow down the candidates: the filter query still applies every
+ * visibility rule, so the provider can't make anything visible that wasn't.
+ *
+ * The substring search only looks into the notes the user may see. A full-text
+ * index usually holds the private notes too, so unless 'rest_issue_search_indexes_private_notes'
+ * is OFF, it is only used for users who may see the private notes in every searched
+ * project: otherwise an issue could be found by words that are only in a private note.
+ *
+ * A full-text engine returns a capped number of best matches. Applied before the
+ * other criteria of the request, the cap would drop issues that match them all (the
+ * best matches of the whole index crowd them out). So the other criteria are resolved
+ * first, by Mantis, and the resulting issue ids are passed to the provider as
+ * 'candidate_ids' (see rest_issue_search_candidates()); the cap then applies to the
+ * filtered set only. When the result is still capped, 'auto' falls back to the
+ * substring search, and 'fulltext' returns the capped result with a warning.
+ *
+ * @param string        $p_search        The search string.
+ * @param string        $p_engine        The requested engine: 'auto' or 'fulltext'.
+ * @param array         $p_project_ids   The searched project ids (array( ALL_PROJECTS ) for all).
+ * @param array         $p_warnings      Warnings, appended to.
+ * @param callable|null $p_candidates_fn Returns the ids matching the other criteria, or null if
+ *                                       there are too many of them to pass on.
+ *
+ * @return array|null The provider result, or null to fall back to the substring search.
+ *
+ * @throws \Mantis\Exceptions\LegacyApiFaultException When 'fulltext' was requested and can't be served.
+ */
+function rest_issue_fulltext_search( $p_search, $p_engine, array $p_project_ids, array &$p_warnings, $p_candidates_fn = null ) {
+	$t_provider = config_get_global( 'rest_issue_search_provider', '' );
+	if( is_blank( $t_provider ) || !is_callable( $t_provider ) ) {
+		if( $p_engine == 'fulltext' ) {
+			ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+				"Full-text search is not configured on this server, use 'search_engine=like' or 'auto'." ) );
+		}
+		return null;
+	}
+
+	if( ON == config_get_global( 'rest_issue_search_indexes_private_notes', ON ) ) {
+		$t_user_id = auth_get_current_user_id();
+		$t_projects = in_array( ALL_PROJECTS, $p_project_ids )
+			? user_get_all_accessible_projects( $t_user_id, ALL_PROJECTS ) : $p_project_ids;
+		$t_private_ok = access_project_array_filter( 'private_bugnote_threshold', $t_projects, $t_user_id );
+		if( count( $t_private_ok ) < count( $t_projects ) ) {
+			$t_message = 'Full-text search is only available to users who may see the private notes'
+				. ' in all the searched projects.';
+			if( $p_engine == 'fulltext' ) {
+				ApiObjectFactory::throwIfFault( ApiObjectFactory::faultForbidden( $t_message ) );
+			}
+			$p_warnings[] = $t_message . ' The substring search was used instead.';
+			return null;
+		}
+	}
+
+	$t_candidates = $p_candidates_fn === null ? null : call_user_func( $p_candidates_fn );
+
+	try {
+		$t_result = call_user_func( $t_provider, (string)$p_search, array( 'candidate_ids' => $t_candidates ) );
+	} catch( Throwable $t_error ) {
+		$t_bad_request = $t_error->getCode() == HTTP_STATUS_BAD_REQUEST;
+		if( $p_engine == 'fulltext' ) {
+			if( $t_bad_request ) {
+				ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest( $t_error->getMessage() ) );
+			}
+			ApiObjectFactory::throwIfFault( ApiObjectFactory::fault( 'Server', $t_error->getMessage(), HTTP_STATUS_UNAVAILABLE ) );
+		}
+		$p_warnings[] = 'Full-text search was not used (' . $t_error->getMessage()
+			. '), the substring search was used instead.';
+		return null;
+	}
+
+	if( !is_array( $t_result ) || !isset( $t_result['ids'] ) || !is_array( $t_result['ids'] ) ) {
+		if( $p_engine == 'fulltext' ) {
+			ApiObjectFactory::throwIfFault( ApiObjectFactory::fault( 'Server', 'Full-text search returned an invalid result.', HTTP_STATUS_UNAVAILABLE ) );
+		}
+		$p_warnings[] = 'Full-text search returned an invalid result, the substring search was used instead.';
+		return null;
+	}
+
+	if( !empty( $t_result['truncated'] ) ) {
+		$t_what = $t_candidates === null ? '' : ' among the issues matching the other criteria';
+		if( $p_engine == 'auto' ) {
+			$p_warnings[] = 'Full-text search matched more issues' . $t_what . ' than it can return'
+				. ' (only the best matches are available), the substring search was used instead'
+				. ' to return them all: narrow down the search, or use search_engine=fulltext for the best matches only.';
+			return null;
+		}
+		$p_warnings[] = 'The result is incomplete: full-text search matched more issues' . $t_what
+			. ' than it can return, only the ' . count( $t_result['ids'] ) . ' best matches were used.'
+			. ' Narrow down the search, or use search_engine=like for all the matches.';
+	}
+
+	return $t_result;
+}
+
+/**
+ * The ids of the issues matching a filter without its search criterion, for the
+ * full-text provider (see rest_issue_fulltext_search()).
+ *
+ * @param array $p_filter      The filter being built (its search is ignored).
+ * @param array $p_options     The BugFilterQuery options built so far.
+ * @param array $p_project_ids The searched project ids.
+ *
+ * @return array|null The ids, or null if there are more than 'rest_issue_search_max_candidates'.
+ */
+function rest_issue_search_candidates( array $p_filter, array $p_options, array $p_project_ids ) {
+	$p_filter[FILTER_PROPERTY_SEARCH] = '';
+	$t_filter = filter_ensure_valid_filter( $p_filter );
+	unset( $p_options['sort_unrestricted'] );
+
+	$t_query = new BugFilterQuery( $t_filter, array_merge( $p_options, array(
+		'query_type' => BugFilterQuery::QUERY_TYPE_DISTINCT_IDS,
+		'project_id' => count( $p_project_ids ) == 1 ? (int)$p_project_ids[0] : ALL_PROJECTS,
+		'user_id'    => auth_get_current_user_id(),
+	) ) );
+
+	# 131072 = 32 queries of 4096 ids, what one searchd batch carries by default.
+	# Measured on 74 570 issues: ids from the database ~0.2 s, Sphinx over all of them
+	# ~0.3 s, versus ~11 s for the substring search.
+	$t_max = (int)config_get_global( 'rest_issue_search_max_candidates', 131072 );
+	if( $t_query->get_bug_count() > $t_max ) {
+		return null;
+	}
+
+	return array_map( 'intval', array_column( $t_query->fetch_all(), 'id' ) );
+}
+
+/**
+ * Fetch a page of issues for a filter, applying the additional query options.
+ *
+ * Mirrors filter_get_bug_rows() (count, pagination, page number clamping and row
+ * caching) so that the results are identical to it, but builds the query itself to
+ * be able to pass the BugFilterQuery options and an explicit offset.
+ *
+ * @param array        $p_filter      A validated filter.
+ * @param integer      $p_project_id  The current project id.
+ * @param integer      $p_user_id     The user id.
+ * @param array        $p_options     Additional BugFilterQuery options.
+ * @param integer      $p_page_number The page number (1-based).
+ * @param integer      $p_page_size   The page size.
+ * @param integer|null $p_offset      Explicit offset, overrides the page number.
+ * @param integer      $p_page_count  Set to the number of pages.
+ * @param integer      $p_bug_count   Set to the number of matching issues.
+ *
+ * @return BugData[]
+ */
+function rest_issue_fetch_rows( array $p_filter, $p_project_id, $p_user_id, array $p_options,
+		$p_page_number, $p_page_size, $p_offset, &$p_page_count, &$p_bug_count ) {
+	$t_query = new BugFilterQuery( $p_filter, array_merge( $p_options, array(
+		'query_type' => BugFilterQuery::QUERY_TYPE_LIST,
+		'project_id' => $p_project_id,
+		'user_id'    => $p_user_id,
+		'use_sticky' => false,
+	) ) );
+
+	$p_page_count = 0;
+	$p_bug_count = (int)$t_query->get_bug_count();
+	if( 0 == $p_bug_count ) {
+		return array();
+	}
+
+	$t_per_page = filter_per_page( $p_filter, $p_bug_count, $p_page_size );
+	$p_page_count = (int)filter_page_count( $p_bug_count, $t_per_page );
+
+	if( $p_offset !== null ) {
+		if( $p_offset >= $p_bug_count ) {
+			return array();
+		}
+		$t_offset = $p_offset;
+	} else {
+		$t_orig_page_number = $p_page_number < 1 ? 1 : (int)$p_page_number;
+		$t_page_number = filter_valid_page_number( $p_page_number, $p_page_count );
+		# the page number was moved back, so we have exceeded the actual page number, see bug #12991
+		if( $t_orig_page_number > $t_page_number ) {
+			return array();
+		}
+		$t_offset = filter_offset( $t_page_number, $t_per_page );
+	}
+
+	$t_query->set_limit( $t_per_page );
+	$t_query->set_offset( $t_offset );
+	$t_rows = $t_query->fetch_all();
+
+	return filter_cache_result( $t_rows, array_column( $t_rows, 'id' ) );
 }
 
 /**
@@ -499,6 +1089,14 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 				"Unknown field(s) in 'select': " . implode( ', ', $t_unknown_fields )
 				. '. Supported fields are: ' . implode( ', ', rest_issue_select_fields() ) . '.' ) );
 		}
+	}
+
+	# Notes trimming: the newest 'notes_limit' notes, in 'notes_order' order.
+	$t_notes_limit = rest_issue_int_param( $p_request, 'notes_limit', 0 );
+	$t_notes_order = strtolower( trim( (string)$p_request->getQueryParam( 'notes_order', 'asc' ) ) );
+	if( !in_array( $t_notes_order, array( 'asc', 'desc' ), true ) ) {
+		ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+			"Invalid value '$t_notes_order' for query parameter 'notes_order', expected asc or desc." ) );
 	}
 
 	# Lightweight projections: 'count_only' returns just the totals, 'fields=id'
@@ -553,31 +1151,50 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 		$t_issue = mc_issue_get( /* username */ '', /* password */ '', $t_issue_id, $t_select );
 		ApiObjectFactory::throwIfFault( $t_issue );
 
+		$t_issue = rest_issue_trim_notes( $t_issue, $t_notes_limit, $t_notes_order );
+
 		$t_result = array( 'issues' => array( $t_issue ) );
 	} else {
 		$t_page_number = $p_request->getParam( 'page', 1 );
 		$t_page_size = $p_request->getParam( 'page_size', 50 );
+		$t_user_id = auth_get_current_user_id();
 
-		# Get a set of issues
-		$t_project_id = (int)$p_request->getParam( 'project_id', ALL_PROJECTS );
-		if( $t_project_id != ALL_PROJECTS ) {
-			$t_message = "Project '$t_project_id' doesn't exist";
-			if (!project_exists( $t_project_id ) ) {
-				return $p_response->withStatus( HTTP_STATUS_NOT_FOUND, $t_message );
+		# 'offset' + 'limit' (or 'page_size'): an explicit position instead of a page number.
+		$t_offset = rest_issue_int_param( $p_request, 'offset', 0 );
+		$t_limit = rest_issue_int_param( $p_request, 'limit', 1 );
+		if( $t_limit !== null ) {
+			if( $p_request->getParam( 'page_size', null ) !== null && (int)$t_page_size != $t_limit ) {
+				$t_warnings[] = "Query parameter 'page_size' was overridden by 'limit'.";
 			}
-
-			$t_user_id = auth_get_current_user_id();
-			if( !access_has_project_level( VIEWER, $t_project_id, $t_user_id ) ) {
-				return $p_response->withStatus( HTTP_STATUS_NOT_FOUND, $t_message );
-			}
+			$t_page_size = $t_limit;
 		}
+		if( $t_offset !== null && $p_request->getParam( 'page', null ) !== null ) {
+			$t_warnings[] = "Query parameter 'page' was ignored: 'offset' was given.";
+		}
+
+		# Get a set of issues: one project, a comma-separated list of projects, and
+		# optionally their sub-projects.
+		$t_include_subprojects = false;
+		if( $p_request->getParam( 'include_subprojects', null ) !== null ) {
+			$t_include_subprojects = rest_issue_parse_bool_param( 'include_subprojects',
+				$p_request->getParam( 'include_subprojects' ) );
+		}
+		$t_missing_project = null;
+		$t_project_ids = rest_issue_parse_projects( $p_request->getParam( 'project_id', null ),
+			$t_include_subprojects, $t_user_id, $t_missing_project );
+		if( $t_missing_project !== null ) {
+			return $p_response->withStatus( HTTP_STATUS_NOT_FOUND, "Project '$t_missing_project' doesn't exist" );
+		}
+		$t_project_id = count( $t_project_ids ) == 1 ? (int)$t_project_ids[0] : ALL_PROJECTS;
 
 		$t_filter_id = trim( $p_request->getParam( 'filter_id', '' ) );
 		# set the current project to correctly account for user permissions
 		helper_set_current_project( $t_project_id );
 
 		# Check for inline filter parameters (handler_id, reporter_id, status_id, etc.)
-		$t_inline_filter = rest_issue_build_inline_filter( $p_request, $t_project_id, $t_warnings );
+		$t_inline_extra = array();
+		$t_inline_filter = rest_issue_build_inline_filter( $p_request, $t_project_ids, $t_warnings, $t_inline_extra );
+		$t_query_options = $t_inline_filter !== null ? $t_inline_extra['options'] : array();
 
 		# Total number of matching issues and pages, populated by the filter calls below.
 		$t_page_count = 0;
@@ -586,7 +1203,6 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 		if( $t_count_only || $t_fields !== null ) {
 			# Lightweight paths: resolve the filter once and query it directly,
 			# without ever materializing BugData objects.
-			$t_user_id = auth_get_current_user_id();
 			$t_filter = rest_issue_resolve_filter(
 				$t_inline_filter, $t_filter_id, $t_project_id, $t_user_id );
 
@@ -596,7 +1212,7 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 
 			if( $t_count_only ) {
 				$t_query = rest_issue_filter_query( $t_filter, $t_project_id, $t_user_id,
-					BugFilterQuery::QUERY_TYPE_COUNT );
+					BugFilterQuery::QUERY_TYPE_COUNT, $t_query_options );
 				$t_query->execute();
 				$t_bug_count = (int)$t_query->value();
 
@@ -608,7 +1224,7 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 				);
 			} else {
 				$t_subquery = rest_issue_filter_query( $t_filter, $t_project_id, $t_user_id,
-					BugFilterQuery::QUERY_TYPE_DISTINCT_IDS );
+					BugFilterQuery::QUERY_TYPE_DISTINCT_IDS, $t_query_options );
 				$t_bug_count = $t_subquery->get_bug_count();
 
 				$t_pagination = rest_issue_pagination( $t_filter, $t_bug_count, $t_page_size );
@@ -616,7 +1232,9 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 				$t_page_number = filter_valid_page_number( $t_page_number, $t_page_count );
 
 				$t_ids = array();
-				if( $t_bug_count > 0 ) {
+				$t_ids_offset = $t_offset !== null
+					? $t_offset : filter_offset( $t_page_number, $t_pagination['per_page'] );
+				if( $t_bug_count > 0 && $t_ids_offset < $t_bug_count ) {
 					# The id list is ordered here rather than by the filter's own sort
 					# columns: those live on joined tables that this query doesn't need,
 					# and paging requires a deterministic, stable order.
@@ -624,8 +1242,7 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 						'SELECT {bug}.id FROM {bug} WHERE {bug}.id IN :filter_ids'
 						. ' ORDER BY {bug}.id DESC' );
 					$t_ids_query->bind( 'filter_ids', $t_subquery );
-					$t_ids_query->execute( array(), $t_pagination['per_page'],
-						filter_offset( $t_page_number, $t_pagination['per_page'] ) );
+					$t_ids_query->execute( array(), $t_pagination['per_page'], $t_ids_offset );
 
 					foreach( $t_ids_query->fetch_all() as $t_row ) {
 						$t_ids[] = array( 'id' => (int)$t_row['id'] );
@@ -638,28 +1255,22 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 					'page_count' => $t_page_count,
 				);
 			}
-		} else if( $t_inline_filter !== null ) {
-			# Use inline filter built from query parameters
-			$t_user_id = auth_get_current_user_id();
+		} else if( $t_inline_filter !== null || $t_offset !== null ) {
+			# Inline filter built from query parameters, or a saved / standard filter
+			# read from an explicit offset.
 			$t_lang = mci_get_user_lang( $t_user_id );
-
-			$t_orig_page_number = $t_page_number < 1 ? 1 : $t_page_number;
-			$t_page_count = 0;
-			$t_bug_count = 0;
-			$t_show_sticky = false;
+			$t_filter = rest_issue_resolve_filter(
+				$t_inline_filter, $t_filter_id, $t_project_id, $t_user_id );
 
 			global $g_project_override;
 			$g_project_override = $t_project_id;
 
-			$t_rows = filter_get_bug_rows(
-				$t_page_number, $t_page_size, $t_page_count, $t_bug_count,
-				$t_inline_filter, $t_project_id, $t_user_id, $t_show_sticky );
+			$t_rows = rest_issue_fetch_rows( $t_filter, $t_project_id, $t_user_id, $t_query_options,
+				$t_page_number, $t_page_size, $t_offset, $t_page_count, $t_bug_count );
 
 			$t_issues = array();
-			if( $t_orig_page_number <= $t_page_number ) {
-				foreach( $t_rows as $t_issue_data ) {
-					$t_issues[] = mci_issue_data_as_array( $t_issue_data, $t_user_id, $t_lang, $t_select );
-				}
+			foreach( $t_rows as $t_issue_data ) {
+				$t_issues[] = mci_issue_data_as_array( $t_issue_data, $t_user_id, $t_lang, $t_select );
 			}
 		} else if( !empty( $t_filter_id ) ) {
 			$t_issues = mc_filter_get_issues(
@@ -672,11 +1283,21 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
 		}
 
 		if( !isset( $t_result ) ) {
+			if( $t_notes_limit !== null || $t_notes_order != 'asc' ) {
+				foreach( $t_issues as $t_ix => $t_issue ) {
+					$t_issues[$t_ix] = rest_issue_trim_notes( $t_issue, $t_notes_limit, $t_notes_order );
+				}
+			}
+
 			$t_result = array(
 				'issues' => $t_issues,
 				'total_count' => (int)$t_bug_count,
 				'page_count' => (int)$t_page_count,
 			);
+		}
+
+		if( $t_inline_filter !== null && !empty( $t_inline_extra['response'] ) ) {
+			$t_result = array_merge( $t_result, $t_inline_extra['response'] );
 		}
 	}
 
@@ -707,26 +1328,40 @@ function rest_issue_get( \Slim\Http\Request $p_request, \Slim\Http\Response $p_r
  * allowing ad-hoc filtering without requiring a saved filter.
  *
  * Supported parameters: search, handler_id, reporter_id, status_id, priority_id,
- * severity_id, category, resolution_id, tag_string, and date range fields.
+ * severity_id, category, resolution_id, tag_string, date range fields, and the
+ * extended ones (see rest_issue_extended_query_params()).
  *
- * @param \Slim\Http\Request $p_request    The request.
- * @param integer            $p_project_id The project id.
- * @param array              $p_warnings   Warnings about the request, appended to.
+ * Criteria that a filter array can't express (sorting by any column, custom field
+ * substring matches, date and time bounds, status changes, full-text search results,
+ * a criterion that can't match anything) are returned as BugFilterQuery options.
+ *
+ * @param \Slim\Http\Request $p_request     The request.
+ * @param array|integer      $p_project_ids The project ids to search (array( ALL_PROJECTS ) for all).
+ * @param array              $p_warnings    Warnings about the request, appended to.
+ * @param array              $p_extra       Set to array( 'options' => BugFilterQuery options,
+ *                                          'response' => additional response fields ).
  * @return array|null Filter array or null if no inline filter params provided.
  *
  * @throws \Mantis\Exceptions\LegacyApiFaultException
  */
-function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_project_id, array &$p_warnings = array() ) {
+function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_project_ids, array &$p_warnings = array(), array &$p_extra = array() ) {
 	require_api( 'filter_constants_inc.php' );
+
+	$p_extra = array( 'options' => array(), 'response' => array() );
+	$t_project_ids = array_map( 'intval', (array)$p_project_ids );
 
 	$s_param_to_filter = rest_issue_filter_param_map();
 
 	# Check if any inline filter parameters are present
-	$t_has_filter_param = false;
-	foreach( $s_param_to_filter as $t_param_name => $t_filter_prop ) {
+	$t_has_filter_param = count( $t_project_ids ) > 1;
+	$s_extended_filter_params = array( 'custom_fields', 'custom_fields_contains',
+		'status_changed_to', 'status_changed_after', 'status_changed_before' );
+	foreach( array_merge( array_keys( $s_param_to_filter ), $s_extended_filter_params ) as $t_param_name ) {
+		if( $t_has_filter_param ) {
+			break;
+		}
 		if( $p_request->getParam( $t_param_name ) !== null ) {
 			$t_has_filter_param = true;
-			break;
 		}
 	}
 
@@ -752,9 +1387,13 @@ function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_proje
 
 	# Build the filter array
 	$t_filter = array( '_view_type' => FILTER_VIEW_TYPE_ADVANCED );
-	$t_filter['project_id'] = array( $p_project_id );
+	$t_filter['project_id'] = $t_project_ids;
 
 	foreach( $s_param_to_filter as $t_param_name => $t_filter_prop ) {
+		if( $t_filter_prop === FILTER_PROPERTY_SORT_FIELD_NAME
+			|| $t_filter_prop === FILTER_PROPERTY_SORT_DIRECTION ) {
+			continue;
+		}
 		$t_value = $p_request->getParam( $t_param_name );
 		if( $t_value !== null ) {
 			# Handle comma-separated values for multi-value fields (e.g. status_id=10,50,80)
@@ -765,6 +1404,32 @@ function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_proje
 			}
 			$t_filter[$t_filter_prop] = $t_value;
 		}
+	}
+
+	# Sorting: several columns, any issue column whether shown on the View Issues page
+	# or not; an unknown column is rejected instead of silently sorting differently.
+	$t_sort = rest_issue_parse_sort( $p_request->getParam( 'sort', null ),
+		$p_request->getParam( 'sort_direction', null ), $p_warnings );
+	if( $t_sort['sort'] !== null ) {
+		$t_filter[FILTER_PROPERTY_SORT_FIELD_NAME] = $t_sort['sort'];
+	}
+	if( $t_sort['direction'] !== null ) {
+		$t_filter[FILTER_PROPERTY_SORT_DIRECTION] = $t_sort['direction'];
+	}
+	$p_extra['options']['sort_unrestricted'] = true;
+
+	# Tags: a tag that doesn't exist can't be on any issue.
+	$t_tag_string = $p_request->getParam( 'tag_string', null );
+	$t_tag_select = $p_request->getParam( 'tag_select', null );
+	if( ( $t_tag_string !== null || $t_tag_select !== null )
+		&& !rest_issue_check_tags( $t_tag_string, $t_tag_select, $p_warnings ) ) {
+		$p_extra['options']['id_in'] = array();
+	}
+
+	# Custom fields
+	$t_custom_field_criteria = rest_issue_parse_custom_fields( $p_request, $p_warnings );
+	if( !empty( $t_custom_field_criteria ) ) {
+		$p_extra['options']['custom_field_criteria'] = $t_custom_field_criteria;
 	}
 
 	# Date range: submitted date
@@ -797,35 +1462,136 @@ function rest_issue_build_inline_filter( \Slim\Http\Request $p_request, $p_proje
 		$t_filter[FILTER_PROPERTY_FILTER_BY_LAST_UPDATED_DATE] = 'on';
 	}
 
-	# Date range: ISO 8601 (YYYY-MM-DD) shorthands, expanded to the day/month/year
-	# fields above; when both forms are given, the ISO one wins.
-	foreach( rest_issue_iso_date_param_map() as $t_param_name => $t_param_info ) {
+	# Date range: ISO 8601 shorthands. A date (YYYY-MM-DD) expands to the day/month/year
+	# fields above; when both forms are given, the ISO one wins. A date and time bound
+	# makes its whole range (both bounds) exact to the second, applied as a query option.
+	$t_iso_map = rest_issue_iso_date_param_map();
+	$t_iso_values = array();
+	foreach( $t_iso_map as $t_param_name => $t_param_info ) {
 		$t_value = $p_request->getParam( $t_param_name );
-		if( $t_value === null ) {
-			continue;
+		if( $t_value !== null ) {
+			$t_is_upper = in_array( $t_param_name, array( 'created_before', 'updated_before' ), true );
+			$t_iso_values[$t_param_name] = rest_issue_parse_iso_datetime( $t_param_name, $t_value, $t_is_upper );
 		}
+	}
 
-		$t_date = rest_issue_parse_iso_date( $t_param_name, $t_value );
-
-		foreach( $t_param_info['legacy'] as $t_legacy_param ) {
-			if( $p_request->getParam( $t_legacy_param ) !== null ) {
-				$p_warnings[] = "Query parameter '$t_legacy_param' was overridden by '$t_param_name'.";
+	$s_ranges = array(
+		'date_submitted' => array( 'created_after', 'created_before' ),
+		'last_updated'   => array( 'updated_after', 'updated_before' ),
+	);
+	foreach( $s_ranges as $t_column => $t_range_params ) {
+		$t_with_time = false;
+		foreach( $t_range_params as $t_param_name ) {
+			if( isset( $t_iso_values[$t_param_name] ) && $t_iso_values[$t_param_name]['has_time'] ) {
+				$t_with_time = true;
 			}
 		}
 
-		foreach( $t_param_info['props'] as $t_date_part => $t_filter_prop ) {
-			$t_filter[$t_filter_prop] = $t_date[$t_date_part];
+		if( $t_with_time ) {
+			$t_bounds = array();
+			foreach( $t_range_params as $t_param_name ) {
+				$t_bounds[] = isset( $t_iso_values[$t_param_name] ) ? $t_iso_values[$t_param_name]['timestamp'] : null;
+				foreach( $t_iso_map[$t_param_name]['legacy'] as $t_legacy_param ) {
+					if( $p_request->getParam( $t_legacy_param ) !== null ) {
+						$p_warnings[] = "Query parameter '$t_legacy_param' was overridden by '"
+							. implode( "' / '", $t_range_params ) . "'.";
+					}
+				}
+				foreach( $t_iso_map[$t_param_name]['props'] as $t_filter_prop ) {
+					unset( $t_filter[$t_filter_prop] );
+				}
+				unset( $t_filter[$t_iso_map[$t_param_name]['flag']] );
+			}
+			$p_extra['options']['date_ranges'][$t_column] = $t_bounds;
+			continue;
 		}
-		$t_filter[$t_param_info['flag']] = 'on';
+
+		foreach( $t_range_params as $t_param_name ) {
+			if( !isset( $t_iso_values[$t_param_name] ) ) {
+				continue;
+			}
+			$t_param_info = $t_iso_map[$t_param_name];
+
+			foreach( $t_param_info['legacy'] as $t_legacy_param ) {
+				if( $p_request->getParam( $t_legacy_param ) !== null ) {
+					$p_warnings[] = "Query parameter '$t_legacy_param' was overridden by '$t_param_name'.";
+				}
+			}
+
+			foreach( $t_param_info['props'] as $t_date_part => $t_filter_prop ) {
+				$t_filter[$t_filter_prop] = $t_iso_values[$t_param_name][$t_date_part];
+			}
+			$t_filter[$t_param_info['flag']] = 'on';
+		}
 	}
 
 	# A range given with only one of its two bounds would otherwise be completed
 	# with the core's defaults, which makes an upper bound on its own match nothing.
-	$t_iso_map = rest_issue_iso_date_param_map();
 	rest_issue_complete_date_range( $t_filter,
 		$t_iso_map['created_after']['props'], $t_iso_map['created_before']['props'] );
 	rest_issue_complete_date_range( $t_filter,
 		$t_iso_map['updated_after']['props'], $t_iso_map['updated_before']['props'] );
+
+	# Status changed to one of the given statuses within a period, from the history.
+	$t_status_changed_to = $p_request->getParam( 'status_changed_to', null );
+	$t_status_changed_after = $p_request->getParam( 'status_changed_after', null );
+	$t_status_changed_before = $p_request->getParam( 'status_changed_before', null );
+	if( $t_status_changed_to !== null || $t_status_changed_after !== null || $t_status_changed_before !== null ) {
+		$t_statuses = array();
+		foreach( explode( ',', (string)$t_status_changed_to ) as $t_status ) {
+			$t_status = trim( $t_status );
+			if( $t_status === '' ) {
+				continue;
+			}
+			if( !ctype_digit( $t_status ) ) {
+				ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+					"Invalid value '$t_status' in 'status_changed_to', expected status ids." ) );
+			}
+			$t_statuses[] = (int)$t_status;
+		}
+		$p_extra['options']['status_changed'] = array(
+			'statuses' => $t_statuses,
+			'from' => $t_status_changed_after === null ? null
+				: rest_issue_parse_iso_datetime( 'status_changed_after', $t_status_changed_after, false )['timestamp'],
+			'to' => $t_status_changed_before === null ? null
+				: rest_issue_parse_iso_datetime( 'status_changed_before', $t_status_changed_before, true )['timestamp'],
+		);
+	}
+
+	# Full-text search: when a provider is configured (see rest_issue_fulltext_search()),
+	# 'search' is answered by it and the substring search is used as the fallback.
+	$t_search_engine = strtolower( trim( (string)$p_request->getParam( 'search_engine', 'auto' ) ) );
+	if( !in_array( $t_search_engine, array( 'auto', 'like', 'fulltext' ), true ) ) {
+		ApiObjectFactory::throwIfFault( ApiObjectFactory::faultBadRequest(
+			"Invalid value '$t_search_engine' for query parameter 'search_engine', expected auto, like or fulltext." ) );
+	}
+	$t_search = isset( $t_filter[FILTER_PROPERTY_SEARCH] ) ? trim( (string)$t_filter[FILTER_PROPERTY_SEARCH] ) : '';
+	if( $t_search === '' ) {
+		if( $p_request->getParam( 'search_engine', null ) !== null ) {
+			$p_warnings[] = "Query parameter 'search_engine' was ignored: there is no 'search'.";
+		}
+	} else {
+		$t_fulltext = null;
+		if( $t_search_engine != 'like' ) {
+			$t_candidate_filter = $t_filter;
+			$t_candidate_options = $p_extra['options'];
+			$t_fulltext = rest_issue_fulltext_search( $t_search, $t_search_engine, $t_project_ids, $p_warnings,
+				function() use ( $t_candidate_filter, $t_candidate_options, $t_project_ids ) {
+					return rest_issue_search_candidates( $t_candidate_filter, $t_candidate_options, $t_project_ids );
+				} );
+		}
+		if( $t_fulltext === null ) {
+			$p_extra['response']['search_engine'] = 'like';
+		} else {
+			$t_ids = array_map( 'intval', $t_fulltext['ids'] );
+			if( isset( $p_extra['options']['id_in'] ) ) {
+				$t_ids = array_values( array_intersect( $p_extra['options']['id_in'], $t_ids ) );
+			}
+			$p_extra['options']['id_in'] = $t_ids;
+			$t_filter[FILTER_PROPERTY_SEARCH] = '';
+			$p_extra['response']['search_engine'] = isset( $t_fulltext['engine'] ) ? (string)$t_fulltext['engine'] : 'fulltext';
+		}
+	}
 
 	return filter_ensure_valid_filter( $t_filter );
 }

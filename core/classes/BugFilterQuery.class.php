@@ -108,6 +108,13 @@ class BugFilterQuery extends DbQuery {
 	public $user_id;
 	public $use_sticky;
 
+	# Additional criteria, not part of the filter array (see constructor documentation)
+	protected $sort_unrestricted = false;
+	protected $id_in = null;
+	protected $custom_field_criteria = array();
+	protected $date_ranges = array();
+	protected $status_changed = null;
+
 	# internal storage for intermediate data
 	protected $query_type;
 	protected $parts_select = array();
@@ -147,6 +154,24 @@ class BugFilterQuery extends DbQuery {
 	 * - 'use_sticky':	(boolean) Whether to allow returning the bug list sorted so that sticky
 	 *					bugs are placed first in the result order. This is false by default.
 	 *
+	 * The following options add criteria that a filter array can't express. They are
+	 * always ANDed with the filter (regardless of its match type) and never weaken the
+	 * visibility rules applied to the filter itself:
+	 * - 'sort_unrestricted': (boolean) Sort by the filter's sort columns even when they are
+	 *					not among the columns the user shows on the View Issues page.
+	 *					A final "id DESC" clause makes the order deterministic.
+	 * - 'id_in':		(array) Only match these issue ids. An empty array matches nothing.
+	 * - 'custom_field_criteria': (array) List of array( 'field_id' => int,
+	 *					'mode' => 'exact'|'contains', 'values' => array ). Values of one
+	 *					criterion are ORed, criteria are ANDed. A field the user can't read
+	 *					in any of the included projects matches nothing.
+	 * - 'date_ranges':	(array) 'date_submitted' and/or 'last_updated' => array( from, to ),
+	 *					unix timestamps, inclusive, either may be null for an open bound.
+	 * - 'status_changed': (array) array( 'statuses' => int[], 'from' => ?int, 'to' => ?int ):
+	 *					the status was changed to one of the statuses within the period,
+	 *					according to the issue history. Only issues whose history the user
+	 *					may view are matched.
+	 *
 	 * @param array $p_filter			Filter array
 	 * @param array|integer $p_config	Options array, or single query type identifier
 	 * @return void
@@ -177,6 +202,21 @@ class BugFilterQuery extends DbQuery {
 						break;
 					case 'use_sticky':
 						$this->use_sticky = (boolean)$t_value;
+						break;
+					case 'sort_unrestricted':
+						$this->sort_unrestricted = (boolean)$t_value;
+						break;
+					case 'id_in':
+						$this->id_in = array_map( 'intval', (array)$t_value );
+						break;
+					case 'custom_field_criteria':
+						$this->custom_field_criteria = (array)$t_value;
+						break;
+					case 'date_ranges':
+						$this->date_ranges = (array)$t_value;
+						break;
+					case 'status_changed':
+						$this->status_changed = (array)$t_value;
 						break;
 				}
 			}
@@ -497,7 +537,125 @@ class BugFilterQuery extends DbQuery {
 
 		$this->build_prop_plugin_filters();
 
+		$this->build_extra_criteria();
+
 		$this->unique_query_parts();
+	}
+
+	/**
+	 * Build the query parts for the additional criteria given as options to the
+	 * constructor (see its documentation). They are always ANDed with the filter.
+	 * @return void
+	 */
+	protected function build_extra_criteria() {
+		if( $this->id_in !== null ) {
+			if( empty( $this->id_in ) ) {
+				$this->add_fixed_where( '1 = 0' );
+				return;
+			}
+			$this->add_fixed_where( $this->sql_in( '{bug}.id', $this->id_in ) );
+		}
+
+		foreach( $this->date_ranges as $t_column => $t_range ) {
+			if( !in_array( $t_column, array( 'date_submitted', 'last_updated' ), true ) ) {
+				continue;
+			}
+			if( isset( $t_range[0] ) ) {
+				$this->add_fixed_where( '{bug}.' . $t_column . ' >= ' . $this->param( (int)$t_range[0] ) );
+			}
+			if( isset( $t_range[1] ) ) {
+				$this->add_fixed_where( '{bug}.' . $t_column . ' <= ' . $this->param( (int)$t_range[1] ) );
+			}
+		}
+
+		foreach( $this->custom_field_criteria as $t_criterion ) {
+			$this->build_custom_field_criterion( $t_criterion );
+		}
+
+		if( !empty( $this->status_changed ) ) {
+			$this->build_status_changed();
+		}
+	}
+
+	/**
+	 * Build the query part for one custom field criterion of the 'custom_field_criteria' option.
+	 * The custom field join applies the field's read access per project, so values the
+	 * user can't see are never matched.
+	 * @param array $p_criterion Array with 'field_id', 'mode' and 'values' entries.
+	 * @return void
+	 */
+	protected function build_custom_field_criterion( array $p_criterion ) {
+		$t_field_id = (int)$p_criterion['field_id'];
+		$t_def = custom_field_get_definition( $t_field_id );
+		$t_table_name = $this->helper_table_alias_for_cf( $t_def );
+		if( !$t_table_name ) {
+			# The field can't be read (or isn't used) in any included project:
+			# no issue can be shown to match it.
+			$this->add_fixed_where( '1 = 0' );
+			return;
+		}
+
+		$t_column = $t_table_name . ( $t_def['type'] == CUSTOM_FIELD_TYPE_TEXTAREA ? '.text' : '.value' );
+		$t_contains = isset( $p_criterion['mode'] ) && $p_criterion['mode'] == 'contains';
+
+		$t_clauses = array();
+		foreach( (array)$p_criterion['values'] as $t_value ) {
+			$t_value = (string)$t_value;
+			if( !$t_contains && filter_field_is_none( $t_value ) ) {
+				$t_clauses[] = $t_table_name . '.bug_id IS NULL';
+				$t_clauses[] = $t_column . ' = ' . $this->param( '' );
+				continue;
+			}
+
+			$t_escaped = str_replace( array( '\\', '%', '_' ), array( '\\\\', '\\%', '\\_' ), $t_value );
+			if( $t_contains ) {
+				$t_clauses[] = $this->sql_like( $t_column, '%' . $t_escaped . '%', '\\' );
+			} else if( $t_def['type'] == CUSTOM_FIELD_TYPE_CHECKBOX || $t_def['type'] == CUSTOM_FIELD_TYPE_MULTILIST ) {
+				$t_clauses[] = $this->sql_like( $t_column, '%|' . $t_escaped . '|%', '\\' );
+			} else {
+				$t_clauses[] = $t_column . ' = ' . $this->param( $t_value );
+			}
+		}
+
+		if( empty( $t_clauses ) ) {
+			return;
+		}
+		$this->add_fixed_where( '( ' . implode( ' OR ', $t_clauses ) . ' )' );
+	}
+
+	/**
+	 * Build the query part for the 'status_changed' option: issues whose status was
+	 * changed to one of the given statuses within the given period, according to
+	 * their history. Restricted to the projects where the user may view the history.
+	 * @return void
+	 */
+	protected function build_status_changed() {
+		$t_statuses = $this->helper_array_map_int( isset( $this->status_changed['statuses'] )
+			? (array)$this->status_changed['statuses'] : array() );
+
+		$t_projects = $this->helper_filter_projects_using_access( 'view_history_threshold' );
+		if( ALL_PROJECTS != $t_projects && empty( $t_projects ) ) {
+			$this->add_fixed_where( '1 = 0' );
+			return;
+		}
+
+		$t_where = '{bug_history}.field_name = ' . $this->param( 'status' )
+			. ' AND {bug_history}.type = ' . $this->param( NORMAL_TYPE );
+		if( !empty( $t_statuses ) ) {
+			# new_value is a varchar column, compare it with strings
+			$t_where .= ' AND ' . $this->sql_in( '{bug_history}.new_value', array_map( 'strval', $t_statuses ) );
+		}
+		if( isset( $this->status_changed['from'] ) ) {
+			$t_where .= ' AND {bug_history}.date_modified >= ' . $this->param( (int)$this->status_changed['from'] );
+		}
+		if( isset( $this->status_changed['to'] ) ) {
+			$t_where .= ' AND {bug_history}.date_modified <= ' . $this->param( (int)$this->status_changed['to'] );
+		}
+
+		$this->add_fixed_where( '{bug}.id IN ( SELECT {bug_history}.bug_id FROM {bug_history} WHERE ' . $t_where . ' )' );
+		if( ALL_PROJECTS != $t_projects ) {
+			$this->add_fixed_where( $this->sql_in( '{bug}.project_id', $t_projects ) );
+		}
 	}
 
 	protected function unique_query_parts() {
@@ -1713,9 +1871,22 @@ class BugFilterQuery extends DbQuery {
 		# Get only the visible, and sortable, column properties
 		# @TODO cproensa: this defaults to COLUMNS_TARGET_VIEW_PAGE
 		# are we sure that filters are only used with the column set for view page?
-		$t_sort_properties = filter_get_visible_sort_properties_array( $this->filter );
-		$t_sort_fields = $t_sort_properties[FILTER_PROPERTY_SORT_FIELD_NAME];
-		$t_dir_fields = $t_sort_properties[FILTER_PROPERTY_SORT_DIRECTION];
+		if( $this->sort_unrestricted ) {
+			# All the valid sort columns of the filter, visible or not. The filter has been
+			# validated, so these are existing, enabled and sortable columns.
+			$t_sort_fields = array_values( array_filter( explode( ',', $this->filter[FILTER_PROPERTY_SORT_FIELD_NAME] ), 'strlen' ) );
+			$t_dir_fields = explode( ',', $this->filter[FILTER_PROPERTY_SORT_DIRECTION] );
+			# 'overdue' is equivalent to sorting by due date
+			foreach( $t_sort_fields as $t_ix => $t_sort_field ) {
+				if( 'overdue' == $t_sort_field ) {
+					$t_sort_fields[$t_ix] = 'due_date';
+				}
+			}
+		} else {
+			$t_sort_properties = filter_get_visible_sort_properties_array( $this->filter );
+			$t_sort_fields = $t_sort_properties[FILTER_PROPERTY_SORT_FIELD_NAME];
+			$t_dir_fields = $t_sort_properties[FILTER_PROPERTY_SORT_DIRECTION];
+		}
 
 		if( gpc_string_to_bool( $this->filter[FILTER_PROPERTY_STICKY] ) && ( $this->use_sticky ) ) {
 			$this->add_order( '{bug}.sticky DESC' );
@@ -1724,7 +1895,7 @@ class BugFilterQuery extends DbQuery {
 		$t_count = count( $t_sort_fields );
 		for( $i = 0; $i < $t_count; $i++ ) {
 			$c_sort = $t_sort_fields[$i];
-			$c_dir = 'DESC' == $t_dir_fields[$i] ? 'DESC' : 'ASC';
+			$c_dir = ( isset( $t_dir_fields[$i] ) && 'DESC' == $t_dir_fields[$i] ) ? 'DESC' : 'ASC';
 
 			# if sorting by a custom field
 			if( column_is_custom_field( $c_sort ) ) {
@@ -1826,6 +1997,10 @@ class BugFilterQuery extends DbQuery {
 		}
 		if( !in_array( 'date_submitted', $t_sort_fields ) ) {
 			$this->add_order( '{bug}.date_submitted DESC' );
+		}
+		# deterministic order, so that paging never repeats or skips issues
+		if( $this->sort_unrestricted && !in_array( 'id', $t_sort_fields ) ) {
+			$this->add_order( '{bug}.id DESC' );
 		}
 	}
 }

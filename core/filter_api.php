@@ -631,6 +631,13 @@ function filter_ensure_valid_filter( array $p_filter_arr ) {
 	}
 	$p_filter_arr['_view_type'] = $t_view_type;
 
+	# The sort properties are comma-separated strings; tolerate them given as arrays
+	# (e.g. by API callers), instead of failing.
+	foreach( array( FILTER_PROPERTY_SORT_FIELD_NAME, FILTER_PROPERTY_SORT_DIRECTION ) as $t_sort_prop ) {
+		if( is_array( $p_filter_arr[$t_sort_prop] ) ) {
+			$p_filter_arr[$t_sort_prop] = implode( ',', array_map( 'trim', $p_filter_arr[$t_sort_prop] ) );
+		}
+	}
 	$t_sort_fields = explode( ',', $p_filter_arr[FILTER_PROPERTY_SORT_FIELD_NAME] );
 	$t_dir_fields = explode( ',', $p_filter_arr[FILTER_PROPERTY_SORT_DIRECTION] );
 	# both arrays should be equal length, just in case
@@ -642,7 +649,7 @@ function filter_ensure_valid_filter( array $p_filter_arr ) {
 	$t_all_columns = columns_get_all_active_columns();
 	for( $ix = 0; $ix < $t_sort_fields_count; $ix++ ) {
 		if( isset( $t_sort_fields[$ix] ) ) {
-			$t_column = $t_sort_fields[$ix];
+			$t_column = trim( $t_sort_fields[$ix] );
 			# check that the column name exist
 			if( !in_array( $t_column, $t_all_columns ) ) {
 				continue;
@@ -664,7 +671,7 @@ function filter_ensure_valid_filter( array $p_filter_arr ) {
 				$t_dir = '';
 			}
 			# normalize sort_dir value
-			$t_dir = ( $t_dir == 'ASC' ) ? 'ASC' : 'DESC';
+			$t_dir = ( strtoupper( trim( $t_dir ) ) == 'ASC' ) ? 'ASC' : 'DESC';
 			$t_new_dir_array[] = $t_dir;
 		}
 	}

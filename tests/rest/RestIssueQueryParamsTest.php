@@ -136,9 +136,11 @@ class RestIssueQueryParamsTest extends RestBase {
 	public function testIsoDateParamFiltersIssues() {
 		$t_issue_id = $this->createIssue();
 
-		$t_all = $this->getIssues( 'search=' . $t_issue_id . '&page_size=1' );
+		# search_engine=like: the substring search finds the issue by its id; a full-text
+		# index (Sphinx) doesn't know an issue created by the test.
+		$t_all = $this->getIssues( 'search=' . $t_issue_id . '&search_engine=like&page_size=1' );
 		$t_filtered = $this->getIssues(
-			'search=' . $t_issue_id . '&updated_before=2000-01-01&page_size=1' );
+			'search=' . $t_issue_id . '&search_engine=like&updated_before=2000-01-01&page_size=1' );
 
 		$this->assertGreaterThan( $t_filtered['total_count'], $t_all['total_count'] );
 	}
