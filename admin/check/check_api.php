@@ -60,6 +60,13 @@ function check_error_handler( $p_type, $p_error, $p_file, $p_line ) {
 	if( $p_type == E_USER_ERROR && $p_error == ERROR_PHP ) {
 		return false;
 	}
+
+	# PHP 8.4: ignore deprecation of trigger_error() with E_USER_ERROR,
+	# the actual error will be handled next.
+	if( error_is_user_error_deprecation( $p_type, $p_error ) ) {
+		return true;
+	}
+
 	$g_errors_raised[] = array(
 		'type' => $p_type,
 		'error' => $p_error,

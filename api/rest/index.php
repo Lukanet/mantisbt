@@ -95,6 +95,12 @@ if( version_compare( Slim\App::VERSION, '4.0', '<' )
 		string $p_file,
 		int    $p_line
 	): bool {
+		# PHP 8.4: ignore deprecation of trigger_error() with E_USER_ERROR,
+		# the actual error will be handled next.
+		if( error_is_user_error_deprecation( $p_type, $p_error ) ) {
+			return true;
+		}
+
 		if( is_windows_server() ) {
 			# Convert to Unix-style path
 			$p_file = str_replace( '\\', '/', $p_file );

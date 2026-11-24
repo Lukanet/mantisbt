@@ -1072,8 +1072,15 @@ EOL;
  */
 function mc_error_handler( $p_type, $p_error, $p_file, $p_line ) {
 	# check if errors were disabled with @ somewhere in this call chain
+	# (since PHP 8, @ no longer sets error_reporting() to 0)
 	# also suppress php 5 strict warnings
-	if( 0 == error_reporting() || 2048 == $p_type ) {
+	if( !( error_reporting() & $p_type ) || 2048 == $p_type ) {
+		return;
+	}
+
+	# PHP 8.4: ignore deprecation of trigger_error() with E_USER_ERROR,
+	# the actual error will be handled next.
+	if( error_is_user_error_deprecation( $p_type, $p_error ) ) {
 		return;
 	}
 

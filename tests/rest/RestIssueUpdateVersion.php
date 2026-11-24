@@ -1,6 +1,7 @@
 <?php
 namespace Mantis\tests\rest;
 
+use Generator;
 use Psr\Http\Message\ResponseInterface;
 
 require_once 'RestIssueTest.php';

@@ -151,6 +151,12 @@ function error_handler( $p_type, $p_error, $p_file, $p_line ) {
 		return;
 	}
 
+	# PHP 8.4: ignore deprecation of trigger_error() with E_USER_ERROR,
+	# the actual error will be handled next.
+	if( error_is_user_error_deprecation( $p_type, $p_error ) ) {
+		return;
+	}
+
 	$t_lang_pushed = false;
 
 	$t_db_connected = false;
@@ -442,6 +448,25 @@ function error_convert_to_exception( $p_type, $p_error, $p_file, $p_line ) {
 }
 
 /**
+ * Check if the error is PHP 8.4's deprecation of trigger_error() with E_USER_ERROR.
+ *
+ * MantisBT raises its errors with trigger_error( ERROR_XXX, ERROR ), and since
+ * PHP 8.4 each call first emits this E_DEPRECATED notice, immediately followed
+ * by the actual E_USER_ERROR. Error handlers should ignore the notice, so that
+ * the real error is processed.
+ *
+ * @param int        $p_type  Level of the error raised.
+ * @param int|string $p_error Error message.
+ *
+ * @return bool True if the error is the E_USER_ERROR deprecation notice.
+ */
+function error_is_user_error_deprecation( $p_type, $p_error ) {
+	return $p_type == E_DEPRECATED
+		&& is_string( $p_error )
+		&& strpos( $p_error, 'Passing E_USER_ERROR to trigger_error() is deprecated' ) === 0;
+}
+
+/**
  * Instruct the error handler to delay display of inline warnings.
  *
  * This should be called prior to trigger_error() when required, e.g. when
@@ -703,7 +728,23 @@ function error_string( $p_error ) {
 	# case the caller didn't provide enough for the error string.
 	$t_parameters = array_pad( $t_parameters, 10, '' );
 
-	return vsprintf( $t_error, $t_parameters );
+	try {
+		return vsprintf( $t_error, $t_parameters );
+	}
+	catch( ValueError $e ) {
+		# Since PHP 8, an invalid format string (e.g. a broken translation)
+		# throws a ValueError; fall back to the English error message.
+		$t_err_msg = lang_get( 'MANTIS_ERROR', 'english' );
+		if( isset( $t_err_msg[$p_error] ) && $t_err_msg[$p_error] !== $t_error ) {
+			try {
+				return vsprintf( $t_err_msg[$p_error], $t_parameters );
+			}
+			catch( ValueError $e ) {
+				# Ignore, return the unformatted string below
+			}
+		}
+		return $t_error;
+	}
 }
 
 /**
